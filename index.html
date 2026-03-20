@@ -282,6 +282,29 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 .chat-suggestion{flex-shrink:0;padding:7px 14px;border-radius:99px;border:1px solid var(--border2);background:var(--surface);font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;white-space:nowrap;transition:all .15s}
 .chat-suggestion:hover{background:var(--accent-l);border-color:var(--accent);color:var(--accent)}
 
+
+/* ── INSTALLMENTS ── */
+.inst-list{display:flex;flex-direction:column;gap:0}
+.inst-item{padding:13px 0;border-bottom:1px solid var(--border)}
+.inst-item:last-child{border:none}
+.inst-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.inst-name{font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:7px}
+.inst-amount{font-size:13px;font-weight:600;font-family:var(--mono);color:var(--text)}
+.inst-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.inst-progress-text{font-size:11px;color:var(--text2)}
+.inst-status{font-size:10px;padding:2px 8px;border-radius:99px;font-weight:600}
+.inst-status.active{background:var(--accent-l);color:var(--accent)}
+.inst-status.completed{background:var(--green-l);color:var(--green)}
+.inst-status.finishing{background:var(--amber-l);color:var(--amber)}
+.inst-bar-track{height:5px;background:var(--surface2);border-radius:99px;overflow:hidden}
+.inst-bar-fill{height:100%;border-radius:99px;transition:width .6s cubic-bezier(.25,.8,.25,1);background:var(--accent)}
+.inst-badge{font-size:9px;padding:2px 7px;border-radius:99px;background:var(--accent-l);color:var(--accent);font-weight:600;display:inline-block;margin-top:2px}
+.installment-selector{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+.inst-opt{height:40px;border-radius:10px;border:1.5px solid var(--border2);background:var(--surface);font-family:var(--font);font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;transition:all .15s}
+.inst-opt.selected{background:var(--accent-l);border-color:var(--accent);color:var(--accent)}
+.inst-notify{background:var(--amber-l);border:1px solid var(--amber);border-radius:12px;padding:10px 14px;margin:8px 16px;font-size:13px;color:var(--amber);display:flex;align-items:center;gap:8px}
+.inst-notify.hidden{display:none}
+
 </style>
 </head>
 <body>
@@ -359,6 +382,16 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
         <div class="sec-head"><div class="sec-title">Top categorías</div><div class="sec-link" onclick="showView('analysis')">Ver todo →</div></div>
         <div class="card"><div class="cat-list" id="dash-cats"></div></div>
       </div>
+      <!-- Installment notifications -->
+      <div class="inst-notify hidden" id="inst-notify">
+        <span>⚠️</span><span id="inst-notify-text"></span>
+      </div>
+
+      <div class="section">
+        <div class="sec-head"><div class="sec-title">Cuotas activas</div><div class="sec-link" onclick="openAddInstallmentModal()">+ Nueva</div></div>
+        <div class="card" id="dash-installments"><div class="empty"><div class="empty-icon">💳</div><div class="empty-title">Sin cuotas activas</div></div></div>
+      </div>
+
       <div class="section">
         <div class="sec-head"><div class="sec-title">Presupuestos</div><div class="sec-link" onclick="openBudgetModal()">+ Nuevo</div></div>
         <div class="card" id="dash-budgets"><div class="empty"><div class="empty-icon">🎯</div><div class="empty-title">Sin presupuestos</div></div></div>
@@ -441,7 +474,20 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
         <div class="form-group"><label class="form-label">Tipo de gasto</label>
           <div class="type-toggle">
             <button class="type-btn a-var" id="btn-var" onclick="setType('variable')">📊 Variable</button>
-            <button class="type-btn" id="btn-fix" onclick="setType('fixed')">🔒 Fijo</button>
+            <button class="type-btn" id="btn-fix" onclick="setType('fixed')">🔒 Fijo/Cuotas</button>
+          </div>
+        </div>
+        <div id="installment-options" style="display:none">
+          <div class="form-group">
+            <label class="form-label">¿Tiene cuotas?</label>
+            <div class="installment-selector" id="inst-selector">
+              <button class="inst-opt selected" onclick="selectInstallments(this,0)">Sin cuotas</button>
+              <button class="inst-opt" onclick="selectInstallments(this,3)">3 cuotas</button>
+              <button class="inst-opt" onclick="selectInstallments(this,6)">6 cuotas</button>
+              <button class="inst-opt" onclick="selectInstallments(this,9)">9 cuotas</button>
+              <button class="inst-opt" onclick="selectInstallments(this,12)">12 cuotas</button>
+              <button class="inst-opt" onclick="selectInstallments(this,-1)">Indefinido</button>
+            </div>
           </div>
         </div>
         <div class="form-group"><label class="form-label">Etiquetas</label>
@@ -906,6 +952,7 @@ let currentUser = null;
 let expenses = [];
 let payMethods = [];
 let budgets = [];
+let installmentPlans = [];
 let fxRates = { USD: 1020, EUR: 1105 };
 let curFilter = 'all';
 let editingId = null;
@@ -1138,6 +1185,252 @@ async function sendChatMessage(){
   q('chat-messages').scrollTop = q('chat-messages').scrollHeight;
 }
 
+/* ══════════════════════════════════════════
+   INSTALLMENTS
+══════════════════════════════════════════ */
+let selectedInstallments = 0; // 0=none, -1=indefinite, N=N cuotas
+
+function selectInstallments(el, n){
+  selectedInstallments = n;
+  qa('.inst-opt').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function getInstPlanTotal(planId){
+  const plan = installmentPlans.find(p=>p.id===planId);
+  if(!plan) return '';
+  if(!plan.total_installments) return '/∞';
+  return '/'+plan.total_installments;
+}
+
+// Generate installment expense for current month if not yet created
+async function generatePendingInstallments(){
+  const now = new Date();
+  const thisMonth = now.toISOString().slice(0,7); // YYYY-MM
+  const notified = [];
+
+  for(const plan of installmentPlans){
+    if(plan.status !== 'active') continue;
+
+    const lastGen = plan.last_generated_date ? plan.last_generated_date.slice(0,7) : null;
+
+    // Already generated this month?
+    if(lastGen === thisMonth) {
+      // Check if last cuota and notify
+      if(plan.total_installments && plan.paid_installments >= plan.total_installments){
+        notified.push(plan.description);
+        await archiveInstallmentPlan(plan.id);
+      }
+      continue;
+    }
+
+    // Calculate which installment number this is
+    const startDate = new Date(plan.start_date);
+    const monthsDiff = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
+    const instNumber = monthsDiff + 1;
+
+    // Check if plan is done
+    if(plan.total_installments && instNumber > plan.total_installments){
+      notified.push(plan.description);
+      await archiveInstallmentPlan(plan.id);
+      continue;
+    }
+
+    // Generate the expense for this month
+    const expDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const totalLabel = plan.total_installments ? `/${plan.total_installments}` : '/∞';
+    try {
+      await dbSaveExpense({
+        date: expDate,
+        amount: plan.amount_per_installment,
+        currency: plan.currency || 'ARS',
+        description: `${plan.description} (cuota ${instNumber}${totalLabel})`,
+        category: plan.category || 'Otros',
+        subcategory: plan.subcategory || 'General',
+        payment_method_id: plan.payment_method_id,
+        merchant: plan.merchant || null,
+        type: 'fixed',
+        tags: plan.tags || [],
+        notes: null,
+        installment_plan_id: plan.id,
+        installment_number: instNumber,
+      });
+
+      // Update plan: last_generated_date and paid_installments
+      await sb.from('installment_plans').update({
+        last_generated_date: expDate,
+        paid_installments: instNumber,
+      }).eq('id', plan.id).then(()=>{});
+
+      // Update local state
+      const idx = installmentPlans.findIndex(p=>p.id===plan.id);
+      if(idx>=0){
+        installmentPlans[idx].last_generated_date = expDate;
+        installmentPlans[idx].paid_installments = instNumber;
+      }
+
+      // Check if this was the last one
+      if(plan.total_installments && instNumber >= plan.total_installments){
+        notified.push(plan.description + ` (última cuota)`);
+        await archiveInstallmentPlan(plan.id);
+      }
+    } catch(err){ console.error('Error generando cuota:', err) }
+  }
+
+  // Show notifications for completed plans
+  if(notified.length > 0){
+    const el = q('inst-notify');
+    const txt = q('inst-notify-text');
+    if(el && txt){
+      txt.textContent = `✅ Cuotas completadas: ${notified.join(', ')}`;
+      el.classList.remove('hidden');
+      setTimeout(()=>el.classList.add('hidden'), 8000);
+    }
+  }
+}
+
+async function archiveInstallmentPlan(planId){
+  await sb.from('installment_plans').update({status:'archived'}).eq('id',planId).then(()=>{});
+  const idx = installmentPlans.findIndex(p=>p.id===planId);
+  if(idx>=0) installmentPlans[idx].status = 'archived';
+}
+
+// Render installment cards in dashboard
+function renderInstallmentCards(){
+  const el = q('dash-installments');
+  if(!el) return;
+  const active = installmentPlans.filter(p=>p.status==='active');
+  if(!active.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">💳</div><div class="empty-title">Sin cuotas activas</div><div style="font-size:12px;color:var(--accent);cursor:pointer;margin-top:4px" onclick="openAddInstallmentModal()">Agregar cuota →</div></div>';
+    return;
+  }
+  el.innerHTML='<div class="inst-list">'+active.map(plan=>{
+    const paid = plan.paid_installments || 0;
+    const total = plan.total_installments;
+    const pct = total ? (paid/total*100) : 50;
+    const isFinishing = total && paid >= total-1;
+    const statusLabel = isFinishing ? 'finishing' : 'active';
+    const statusText = isFinishing ? 'Última cuota' : 'Activa';
+    const progressText = total ? `${paid}/${total} cuotas` : `${paid} cuotas (indefinido)`;
+    const pm = getPM(plan.payment_method_id);
+    return `<div class="inst-item" onclick="openInstallmentModal('${plan.id}')">
+      <div class="inst-header">
+        <div class="inst-name">${CATS[plan.category]?.icon||'💳'} ${plan.description}</div>
+        <div class="inst-amount">$${fmt(plan.amount_per_installment)}/mes</div>
+      </div>
+      <div class="inst-meta">
+        <div class="inst-progress-text">${progressText} · ${pm.name}</div>
+        <div class="inst-status ${statusLabel}">${statusText}</div>
+      </div>
+      <div class="inst-bar-track">
+        <div class="inst-bar-fill" style="width:${Math.min(pct,100)}%;background:${isFinishing?'var(--amber)':'var(--accent)'}"></div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
+
+// Add installment modal
+function openAddInstallmentModal(){
+  q('modal-ov').classList.remove('open');
+  q('modal-title').textContent = 'Nueva cuota / gasto fijo';
+  let instCount = 0;
+  q('modal-body').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="position:relative">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-family:var(--mono)">$</span>
+        <input class="inp" id="im-amount" type="text" inputmode="decimal" placeholder="Importe por cuota" style="padding-left:24px">
+      </div>
+      <input class="inp" id="im-desc" type="text" placeholder="Descripción (ej. Auto en cuotas)">
+      <select class="sel" id="im-cat">
+        ${Object.keys(CATS).map(c=>`<option value="${c}">${CATS[c].icon} ${c}</option>`).join('')}
+      </select>
+      <select class="sel" id="im-pm">
+        ${payMethods.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+      </select>
+      <input class="inp" id="im-merchant" type="text" placeholder="Comercio (opcional)">
+      <input class="inp" id="im-startdate" type="date" value="${new Date().toISOString().split('T')[0]}">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Cantidad de cuotas</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          ${[['Sin cuotas',0],['3 cuotas',3],['6 cuotas',6],['9 cuotas',9],['12 cuotas',12],['Indefinido',-1]].map(([label,n],i)=>
+            `<button type="button" class="inst-opt${i===0?' selected':''}" id="im-inst-${n}" onclick="selectInstModal(this,${n})">${label}</button>`
+          ).join('')}
+        </div>
+      </div>
+    </div>`;
+  window.selectInstModal = function(el, n){
+    instCount = n;
+    document.querySelectorAll('[id^=im-inst-]').forEach(b=>b.classList.remove('selected'));
+    el.classList.add('selected');
+  };
+  q('modal-actions').innerHTML = `<button class="modal-btn primary" id="save-inst-btn">Guardar cuota</button>`;
+  q('save-inst-btn').onclick = async()=>{
+    const amount = parseFloat(q('im-amount').value);
+    const desc = q('im-desc').value.trim();
+    if(!amount||amount<=0){showToast('⚠️ Ingresá un importe');return}
+    if(!desc){showToast('⚠️ Ingresá una descripción');return}
+    q('save-inst-btn').textContent='Guardando...';
+    try {
+      const plan = {
+        user_id: currentUser.id,
+        description: desc,
+        amount_per_installment: amount,
+        currency: 'ARS',
+        total_installments: instCount === 0 ? null : instCount === -1 ? null : instCount,
+        paid_installments: 0,
+        start_date: q('im-startdate').value,
+        last_generated_date: null,
+        category: q('im-cat').value,
+        subcategory: 'General',
+        payment_method_id: q('im-pm').value,
+        merchant: q('im-merchant').value.trim()||null,
+        tags: [],
+        status: 'active',
+      };
+      const {data, error} = await sb.from('installment_plans').insert(plan).select().single();
+      if(error) throw error;
+      installmentPlans.push(data);
+      // Generate first installment immediately
+      await generatePendingInstallments();
+      q('modal-ov').classList.remove('open');
+      showToast('Cuota creada ✓');
+      renderDash();
+    } catch(err){ showToast('Error: '+err.message); q('save-inst-btn').textContent='Guardar cuota' }
+  };
+  q('modal-ov').classList.add('open');
+}
+
+// View/delete installment plan
+function openInstallmentModal(planId){
+  const plan = installmentPlans.find(p=>p.id===planId);
+  if(!plan) return;
+  const pm = getPM(plan.payment_method_id);
+  const paid = plan.paid_installments||0;
+  const total = plan.total_installments;
+  q('modal-title').textContent = plan.description;
+  q('modal-body').innerHTML = `
+    <div style="background:var(--surface2);border-radius:12px;padding:12px 14px;margin-bottom:4px">
+      <div style="font-size:22px;font-weight:600;font-family:var(--mono);color:var(--text)">$${fmt(plan.amount_per_installment)}<span style="font-size:13px;font-weight:400;color:var(--text2)">/mes</span></div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">${pm.name} · ${plan.category}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">Cuotas pagadas: ${paid}${total?'/'+total:' (indefinido)'}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">Inicio: ${plan.start_date}</div>
+      ${total?`<div style="margin-top:8px"><div class="inst-bar-track"><div class="inst-bar-fill" style="width:${Math.min(paid/total*100,100)}%"></div></div><div style="font-size:11px;color:var(--text3);margin-top:3px">${(paid/total*100).toFixed(0)}% completado · Resta $${fmt((total-paid)*plan.amount_per_installment)}</div></div>`:''}
+    </div>`;
+  q('modal-actions').innerHTML = `
+    <button class="modal-btn danger" onclick="deleteInstallmentPlan('${planId}')">🗑️ Eliminar plan de cuotas</button>`;
+  q('modal-ov').classList.add('open');
+}
+
+async function deleteInstallmentPlan(planId){
+  closeModal({});
+  try {
+    await sb.from('installment_plans').delete().eq('id',planId).then(()=>{});
+    installmentPlans = installmentPlans.filter(p=>p.id!==planId);
+    showToast('Plan eliminado');
+    renderDash();
+  } catch(err){ showToast('Error: '+err.message) }
+}
+
 initApp();
       return;
     } else {
@@ -1184,15 +1477,19 @@ function showAuthSuccess(msg){ q('auth-success').textContent=msg; q('auth-succes
 async function loadAllData(){
   showLoading();
   try {
-    const [expRes, pmRes, budRes, settRes] = await Promise.all([
+    const [expRes, pmRes, budRes, settRes, instRes] = await Promise.all([
       sb.from('expenses').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}).select_run(),
       sb.from('payment_methods').select('*').eq('user_id',currentUser.id).order('created_at').select_run(),
       sb.from('budgets').select('*').eq('user_id',currentUser.id).select_run(),
       sb.from('user_settings').select('*').eq('user_id',currentUser.id).single().select_run(),
+      sb.from('installment_plans').select('*').eq('user_id',currentUser.id).select_run(),
     ]);
     expenses = expRes.data || [];
     payMethods = pmRes.data || [];
     budgets = budRes.data || [];
+    installmentPlans = instRes.data || [];
+    // Auto-generate pending installment expenses on load
+    await generatePendingInstallments();
     if(settRes.data){ fxRates = {USD:settRes.data.fx_usd, EUR:settRes.data.fx_eur} }
     // Default payment methods if none
     if(payMethods.length===0) await seedDefaultPayMethods();
@@ -1230,6 +1527,8 @@ async function dbSaveExpense(expense){
     notes: expense.notes || null,
     type: expense.type,
     tags: expense.tags || [],
+    installment_plan_id: expense.installment_plan_id || null,
+    installment_number: expense.installment_number || null,
   };
   if(expense.id && typeof expense.id === 'string' && expense.id.includes('-')){
     // update
@@ -1352,6 +1651,8 @@ function renderDash(){
   const cats=getCatStats(cur).slice(0,5);
   q('dash-cats').innerHTML = cats.map(c=>`<div class="cat-item"><div class="cat-item-top"><div class="cat-name"><div class="cat-dot" style="background:${CATS[c.cat]?.color||'#94a3b8'}"></div><span>${CATS[c.cat]?.icon||'•'} ${c.cat}</span></div><div style="display:flex;gap:7px;align-items:center"><span class="cat-pct">${c.pct.toFixed(0)}%</span><span class="cat-amount">$${fmt(c.amount)}</span></div></div><div class="bar-track"><div class="bar-fill" style="width:${c.pct}%;background:${CATS[c.cat]?.color||'#94a3b8'}"></div></div></div>`).join('') || '<p style="color:var(--text3);font-size:13px">Sin datos este mes</p>';
 
+  // Installments
+  renderInstallmentCards();
   // Budgets
   renderBudgetCards(cur);
 
@@ -1433,7 +1734,8 @@ function renderExpItems(items,containerId,grouped=false){
 function expHtml(e){
   const pm=getPM(e.payment_method_id);
   const sym=e.currency==='USD'?'U$S ':e.currency==='EUR'?'€ ':'$';
-  return`<div class="exp-item" onclick="openExpModal('${e.id}')"><div class="exp-icon" style="background:${CATS[e.category]?.color||'#94a3b8'}22">${CATS[e.category]?.icon||'💼'}</div><div class="exp-info"><div class="exp-desc">${e.description}</div><div class="exp-meta">${pm.name} · ${e.category}</div></div><div class="exp-right"><div class="exp-amount">${sym}${fmt(e.amount)}</div><div class="exp-badge badge-${e.type==='fixed'?'fixed':'var'}">${e.type==='fixed'?'🔒 Fijo':'📊 Var'}</div></div></div>`;
+  const instBadge = e.installment_number && e.installment_plan_id ? `<div class="inst-badge">Cuota ${e.installment_number}${getInstPlanTotal(e.installment_plan_id)}</div>` : '';
+  return`<div class="exp-item" onclick="openExpModal('${e.id}')"><div class="exp-icon" style="background:${CATS[e.category]?.color||'#94a3b8'}22">${CATS[e.category]?.icon||'💼'}</div><div class="exp-info"><div class="exp-desc">${e.description}</div><div class="exp-meta">${pm.name} · ${e.category}</div>${instBadge}</div><div class="exp-right"><div class="exp-amount">${sym}${fmt(e.amount)}</div><div class="exp-badge badge-${e.type==='fixed'?'fixed':'var'}">${e.type==='fixed'?'🔒 Fijo':'📊 Var'}</div></div></div>`;
 }
 
 /* ══════════════════════════════════════════
@@ -1511,6 +1813,10 @@ function resetForm(){
   setType('variable');
   selPmId=payMethods[0]?.id||null;
   qa('.tag').forEach(t=>t.classList.remove('active'));
+  // Reset installments
+  selectedInstallments = 0;
+  qa('.inst-opt').forEach((b,i)=>b.classList.toggle('selected',i===0));
+  q('installment-options').style.display='none';
   renderPMCards();
 }
 
@@ -1522,6 +1828,8 @@ function setType(t){
   selType=t;
   q('btn-var').className='type-btn'+(t==='variable'?' a-var':'');
   q('btn-fix').className='type-btn'+(t==='fixed'?' a-fixed':'');
+  q('installment-options').style.display = t==='fixed'?'block':'none';
+  if(t==='variable'){ selectedInstallments=0; }
 }
 
 function updateSubcats(){
@@ -1906,6 +2214,252 @@ async function sendChatMessage(){
 
   btn.disabled = false;
   q('chat-messages').scrollTop = q('chat-messages').scrollHeight;
+}
+
+/* ══════════════════════════════════════════
+   INSTALLMENTS
+══════════════════════════════════════════ */
+let selectedInstallments = 0; // 0=none, -1=indefinite, N=N cuotas
+
+function selectInstallments(el, n){
+  selectedInstallments = n;
+  qa('.inst-opt').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function getInstPlanTotal(planId){
+  const plan = installmentPlans.find(p=>p.id===planId);
+  if(!plan) return '';
+  if(!plan.total_installments) return '/∞';
+  return '/'+plan.total_installments;
+}
+
+// Generate installment expense for current month if not yet created
+async function generatePendingInstallments(){
+  const now = new Date();
+  const thisMonth = now.toISOString().slice(0,7); // YYYY-MM
+  const notified = [];
+
+  for(const plan of installmentPlans){
+    if(plan.status !== 'active') continue;
+
+    const lastGen = plan.last_generated_date ? plan.last_generated_date.slice(0,7) : null;
+
+    // Already generated this month?
+    if(lastGen === thisMonth) {
+      // Check if last cuota and notify
+      if(plan.total_installments && plan.paid_installments >= plan.total_installments){
+        notified.push(plan.description);
+        await archiveInstallmentPlan(plan.id);
+      }
+      continue;
+    }
+
+    // Calculate which installment number this is
+    const startDate = new Date(plan.start_date);
+    const monthsDiff = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
+    const instNumber = monthsDiff + 1;
+
+    // Check if plan is done
+    if(plan.total_installments && instNumber > plan.total_installments){
+      notified.push(plan.description);
+      await archiveInstallmentPlan(plan.id);
+      continue;
+    }
+
+    // Generate the expense for this month
+    const expDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const totalLabel = plan.total_installments ? `/${plan.total_installments}` : '/∞';
+    try {
+      await dbSaveExpense({
+        date: expDate,
+        amount: plan.amount_per_installment,
+        currency: plan.currency || 'ARS',
+        description: `${plan.description} (cuota ${instNumber}${totalLabel})`,
+        category: plan.category || 'Otros',
+        subcategory: plan.subcategory || 'General',
+        payment_method_id: plan.payment_method_id,
+        merchant: plan.merchant || null,
+        type: 'fixed',
+        tags: plan.tags || [],
+        notes: null,
+        installment_plan_id: plan.id,
+        installment_number: instNumber,
+      });
+
+      // Update plan: last_generated_date and paid_installments
+      await sb.from('installment_plans').update({
+        last_generated_date: expDate,
+        paid_installments: instNumber,
+      }).eq('id', plan.id).then(()=>{});
+
+      // Update local state
+      const idx = installmentPlans.findIndex(p=>p.id===plan.id);
+      if(idx>=0){
+        installmentPlans[idx].last_generated_date = expDate;
+        installmentPlans[idx].paid_installments = instNumber;
+      }
+
+      // Check if this was the last one
+      if(plan.total_installments && instNumber >= plan.total_installments){
+        notified.push(plan.description + ` (última cuota)`);
+        await archiveInstallmentPlan(plan.id);
+      }
+    } catch(err){ console.error('Error generando cuota:', err) }
+  }
+
+  // Show notifications for completed plans
+  if(notified.length > 0){
+    const el = q('inst-notify');
+    const txt = q('inst-notify-text');
+    if(el && txt){
+      txt.textContent = `✅ Cuotas completadas: ${notified.join(', ')}`;
+      el.classList.remove('hidden');
+      setTimeout(()=>el.classList.add('hidden'), 8000);
+    }
+  }
+}
+
+async function archiveInstallmentPlan(planId){
+  await sb.from('installment_plans').update({status:'archived'}).eq('id',planId).then(()=>{});
+  const idx = installmentPlans.findIndex(p=>p.id===planId);
+  if(idx>=0) installmentPlans[idx].status = 'archived';
+}
+
+// Render installment cards in dashboard
+function renderInstallmentCards(){
+  const el = q('dash-installments');
+  if(!el) return;
+  const active = installmentPlans.filter(p=>p.status==='active');
+  if(!active.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">💳</div><div class="empty-title">Sin cuotas activas</div><div style="font-size:12px;color:var(--accent);cursor:pointer;margin-top:4px" onclick="openAddInstallmentModal()">Agregar cuota →</div></div>';
+    return;
+  }
+  el.innerHTML='<div class="inst-list">'+active.map(plan=>{
+    const paid = plan.paid_installments || 0;
+    const total = plan.total_installments;
+    const pct = total ? (paid/total*100) : 50;
+    const isFinishing = total && paid >= total-1;
+    const statusLabel = isFinishing ? 'finishing' : 'active';
+    const statusText = isFinishing ? 'Última cuota' : 'Activa';
+    const progressText = total ? `${paid}/${total} cuotas` : `${paid} cuotas (indefinido)`;
+    const pm = getPM(plan.payment_method_id);
+    return `<div class="inst-item" onclick="openInstallmentModal('${plan.id}')">
+      <div class="inst-header">
+        <div class="inst-name">${CATS[plan.category]?.icon||'💳'} ${plan.description}</div>
+        <div class="inst-amount">$${fmt(plan.amount_per_installment)}/mes</div>
+      </div>
+      <div class="inst-meta">
+        <div class="inst-progress-text">${progressText} · ${pm.name}</div>
+        <div class="inst-status ${statusLabel}">${statusText}</div>
+      </div>
+      <div class="inst-bar-track">
+        <div class="inst-bar-fill" style="width:${Math.min(pct,100)}%;background:${isFinishing?'var(--amber)':'var(--accent)'}"></div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
+
+// Add installment modal
+function openAddInstallmentModal(){
+  q('modal-ov').classList.remove('open');
+  q('modal-title').textContent = 'Nueva cuota / gasto fijo';
+  let instCount = 0;
+  q('modal-body').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="position:relative">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-family:var(--mono)">$</span>
+        <input class="inp" id="im-amount" type="text" inputmode="decimal" placeholder="Importe por cuota" style="padding-left:24px">
+      </div>
+      <input class="inp" id="im-desc" type="text" placeholder="Descripción (ej. Auto en cuotas)">
+      <select class="sel" id="im-cat">
+        ${Object.keys(CATS).map(c=>`<option value="${c}">${CATS[c].icon} ${c}</option>`).join('')}
+      </select>
+      <select class="sel" id="im-pm">
+        ${payMethods.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+      </select>
+      <input class="inp" id="im-merchant" type="text" placeholder="Comercio (opcional)">
+      <input class="inp" id="im-startdate" type="date" value="${new Date().toISOString().split('T')[0]}">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Cantidad de cuotas</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          ${[['Sin cuotas',0],['3 cuotas',3],['6 cuotas',6],['9 cuotas',9],['12 cuotas',12],['Indefinido',-1]].map(([label,n],i)=>
+            `<button type="button" class="inst-opt${i===0?' selected':''}" id="im-inst-${n}" onclick="selectInstModal(this,${n})">${label}</button>`
+          ).join('')}
+        </div>
+      </div>
+    </div>`;
+  window.selectInstModal = function(el, n){
+    instCount = n;
+    document.querySelectorAll('[id^=im-inst-]').forEach(b=>b.classList.remove('selected'));
+    el.classList.add('selected');
+  };
+  q('modal-actions').innerHTML = `<button class="modal-btn primary" id="save-inst-btn">Guardar cuota</button>`;
+  q('save-inst-btn').onclick = async()=>{
+    const amount = parseFloat(q('im-amount').value);
+    const desc = q('im-desc').value.trim();
+    if(!amount||amount<=0){showToast('⚠️ Ingresá un importe');return}
+    if(!desc){showToast('⚠️ Ingresá una descripción');return}
+    q('save-inst-btn').textContent='Guardando...';
+    try {
+      const plan = {
+        user_id: currentUser.id,
+        description: desc,
+        amount_per_installment: amount,
+        currency: 'ARS',
+        total_installments: instCount === 0 ? null : instCount === -1 ? null : instCount,
+        paid_installments: 0,
+        start_date: q('im-startdate').value,
+        last_generated_date: null,
+        category: q('im-cat').value,
+        subcategory: 'General',
+        payment_method_id: q('im-pm').value,
+        merchant: q('im-merchant').value.trim()||null,
+        tags: [],
+        status: 'active',
+      };
+      const {data, error} = await sb.from('installment_plans').insert(plan).select().single();
+      if(error) throw error;
+      installmentPlans.push(data);
+      // Generate first installment immediately
+      await generatePendingInstallments();
+      q('modal-ov').classList.remove('open');
+      showToast('Cuota creada ✓');
+      renderDash();
+    } catch(err){ showToast('Error: '+err.message); q('save-inst-btn').textContent='Guardar cuota' }
+  };
+  q('modal-ov').classList.add('open');
+}
+
+// View/delete installment plan
+function openInstallmentModal(planId){
+  const plan = installmentPlans.find(p=>p.id===planId);
+  if(!plan) return;
+  const pm = getPM(plan.payment_method_id);
+  const paid = plan.paid_installments||0;
+  const total = plan.total_installments;
+  q('modal-title').textContent = plan.description;
+  q('modal-body').innerHTML = `
+    <div style="background:var(--surface2);border-radius:12px;padding:12px 14px;margin-bottom:4px">
+      <div style="font-size:22px;font-weight:600;font-family:var(--mono);color:var(--text)">$${fmt(plan.amount_per_installment)}<span style="font-size:13px;font-weight:400;color:var(--text2)">/mes</span></div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">${pm.name} · ${plan.category}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">Cuotas pagadas: ${paid}${total?'/'+total:' (indefinido)'}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">Inicio: ${plan.start_date}</div>
+      ${total?`<div style="margin-top:8px"><div class="inst-bar-track"><div class="inst-bar-fill" style="width:${Math.min(paid/total*100,100)}%"></div></div><div style="font-size:11px;color:var(--text3);margin-top:3px">${(paid/total*100).toFixed(0)}% completado · Resta $${fmt((total-paid)*plan.amount_per_installment)}</div></div>`:''}
+    </div>`;
+  q('modal-actions').innerHTML = `
+    <button class="modal-btn danger" onclick="deleteInstallmentPlan('${planId}')">🗑️ Eliminar plan de cuotas</button>`;
+  q('modal-ov').classList.add('open');
+}
+
+async function deleteInstallmentPlan(planId){
+  closeModal({});
+  try {
+    await sb.from('installment_plans').delete().eq('id',planId).then(()=>{});
+    installmentPlans = installmentPlans.filter(p=>p.id!==planId);
+    showToast('Plan eliminado');
+    renderDash();
+  } catch(err){ showToast('Error: '+err.message) }
 }
 
 initApp();
