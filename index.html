@@ -7,11 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Gastia">
 <title>Gastia — Control de Gastos</title>
-<link rel="preconnect" href="https://cdnjs.cloudflare.com">
-<link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="preconnect" href="https://lxlqgkwiapyehumbfzdm.supabase.co">
-<link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
-<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
 
 
 <style>
@@ -527,13 +523,135 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 <div class="toast" id="toast"></div>
 
 <script>
-window.addEventListener('load', function(){
 /* ══════════════════════════════════════════
    SUPABASE CONFIG
 ══════════════════════════════════════════ */
-const SUPABASE_URL = 'https://lxlqgkwiapyehumbfzdm.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx4bHFna3dpYXB5ZWh1bWJmemRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMzQxNTEsImV4cCI6MjA4OTYxMDE1MX0.crFZHWnAx3Ph6sY6GzY8kAMk41eoWo9jvpIR5Fj9Rko';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const SUPA_URL = 'https://lxlqgkwiapyehumbfzdm.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx4bHFna3dpYXB5ZWh1bWJmemRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMzQxNTEsImV4cCI6MjA4OTYxMDE1MX0.crFZHWnAx3Ph6sY6GzY8kAMk41eoWo9jvpIR5Fj9Rko';
+let _token = null;
+let _refreshToken = null;
+
+// ── Minimal Supabase REST client ──
+const sb = {
+  _headers(extra={}){
+    const h = {'Content-Type':'application/json','apikey':SUPA_KEY,'Prefer':'return=representation',...extra};
+    if(_token) h['Authorization']='Bearer '+_token;
+    return h;
+  },
+  async _rest(method,table,body=null,query=''){
+    const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${query}`,{method,headers:this._headers(),body:body?JSON.stringify(body):null});
+    if(!r.ok){const e=await r.json();throw new Error(e.message||e.error_description||'Error '+r.status)}
+    const txt=await r.text();
+    return txt?JSON.parse(txt):null;
+  },
+  from(table){
+    return {
+      _q:'',_method:'GET',_body:null,_table:table,
+      select(cols='*'){this._q+=(this._q?'&':'')+'select='+cols;return this},
+      eq(col,val){this._q+=(this._q?'&':'')+col+'=eq.'+encodeURIComponent(val);return this},
+      order(col,{ascending=true}={}){this._q+=(this._q?'&':'')+'order='+col+(ascending?'.asc':'.desc');return this},
+      single(){this._single=true;return this},
+      async select_run(){
+        const r=await sb._rest('GET',this._table,null,this._q);
+        if(this._single)return{data:Array.isArray(r)?r[0]:r,error:null};
+        return{data:r||[],error:null};
+      },
+      insert(data){
+        return{
+          select(){return this},
+          single(){this._single=true;return this},
+          async then(res,rej){
+            try{
+              const r=await sb._rest('POST',table,Array.isArray(data)?data:[data]);
+              const result=Array.isArray(r)?r[0]:r;
+              res({data:result,error:null});
+            }catch(e){rej?rej(e):res({data:null,error:e})}
+          }
+        }
+      },
+      update(data){
+        const q=this._q;
+        return{
+          eq(col,val){this._q2=(q?q+'&':'')+col+'=eq.'+encodeURIComponent(val);return this},
+          select(){return this},single(){this._single=true;return this},
+          async then(res,rej){
+            try{
+              const r=await sb._rest('PATCH',table,data,this._q2||q);
+              const result=Array.isArray(r)?r[0]:r;
+              res({data:result,error:null});
+            }catch(e){rej?rej(e):res({data:null,error:e})}
+          }
+        }
+      },
+      delete(){
+        const q=this._q;
+        return{
+          eq(col,val){this._q2=(q?q+'&':'')+col+'=eq.'+encodeURIComponent(val);return this},
+          async then(res,rej){
+            try{
+              await fetch(`${SUPA_URL}/rest/v1/${table}?${this._q2||q}`,{method:'DELETE',headers:sb._headers()});
+              res({error:null});
+            }catch(e){rej?rej(e):res({error:e})}
+          }
+        }
+      }
+    }
+  },
+  // ── Auth ──
+  auth:{
+    async signInWithPassword({email,password}){
+      const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY},body:JSON.stringify({email,password})});
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error_description||d.msg||'Login failed');
+      _token=d.access_token;_refreshToken=d.refresh_token;
+      localStorage.setItem('gastia_session',JSON.stringify({access_token:d.access_token,refresh_token:d.refresh_token,user:d.user}));
+      return{data:{user:d.user},error:null};
+    },
+    async signUp({email,password}){
+      const r=await fetch(`${SUPA_URL}/auth/v1/signup`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY},body:JSON.stringify({email,password})});
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error_description||d.msg||'Signup failed');
+      return{data:{user:d.user},error:null};
+    },
+    async signOut(){
+      await fetch(`${SUPA_URL}/auth/v1/logout`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+(_token||'')}});
+      _token=null;_refreshToken=null;
+      localStorage.removeItem('gastia_session');
+    },
+    async resetPasswordForEmail(email){
+      await fetch(`${SUPA_URL}/auth/v1/recover`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY},body:JSON.stringify({email})});
+    },
+    async getSession(){
+      const s=localStorage.getItem('gastia_session');
+      if(!s)return{data:{session:null}};
+      const sess=JSON.parse(s);
+      _token=sess.access_token;
+      // verify token not expired
+      try{
+        const payload=JSON.parse(atob(sess.access_token.split('.')[1]));
+        if(payload.exp*1000 < Date.now()){
+          // try refresh
+          const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY},body:JSON.stringify({refresh_token:sess.refresh_token})});
+          if(r.ok){
+            const d=await r.json();
+            _token=d.access_token;_refreshToken=d.refresh_token;
+            const newSess={access_token:d.access_token,refresh_token:d.refresh_token,user:d.user||sess.user};
+            localStorage.setItem('gastia_session',JSON.stringify(newSess));
+            return{data:{session:{...newSess,user:newSess.user}}};
+          } else {
+            localStorage.removeItem('gastia_session');_token=null;
+            return{data:{session:null}};
+          }
+        }
+        return{data:{session:{...sess,user:sess.user}}};
+      }catch(e){localStorage.removeItem('gastia_session');_token=null;return{data:{session:null}}}
+    },
+    onAuthStateChange(cb){
+      // called on init - we handle this manually
+      window._authCb=cb;
+    }
+  }
+};
 
 /* ══════════════════════════════════════════
    CONSTANTS
@@ -563,6 +681,141 @@ const CARD_COLORS = [
   ['#1e3a5f','#2980b9'],['#2d3436','#636e72'],
 ];
 const CARD_NETWORKS = ['Visa','Mastercard','Amex','Naranja','Cabal','Débito','Efectivo','Transferencia','Mercado Pago'];
+
+
+/* ══════════════════════════════════════════
+   NATIVE CANVAS CHARTS (no Chart.js needed)
+══════════════════════════════════════════ */
+function drawBarChart(canvasId, labels, values, {color='#2563eb', isDark=false}={}){
+  const canvas=q(canvasId); if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.offsetWidth||300, H=canvas.offsetHeight||180;
+  canvas.width=W*window.devicePixelRatio; canvas.height=H*window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
+  ctx.clearRect(0,0,W,H);
+  const pad={l:40,r:10,t:10,b:28};
+  const cW=W-pad.l-pad.r, cH=H-pad.t-pad.b;
+  const maxV=Math.max(...values,1);
+  const barW=Math.floor(cW/values.length*0.6);
+  const gap=cW/values.length;
+  const textColor=isDark?'#6b6a62':'#9b9a94';
+  ctx.font=`11px -apple-system,system-ui,sans-serif`;
+  // grid lines
+  for(let i=0;i<=4;i++){
+    const y=pad.t+cH*(1-i/4);
+    ctx.strokeStyle=isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.06)';
+    ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(pad.l+cW,y); ctx.stroke();
+    ctx.fillStyle=textColor; ctx.textAlign='right';
+    ctx.fillText(fmtS(maxV*i/4),pad.l-4,y+4);
+  }
+  values.forEach((v,i)=>{
+    const x=pad.l+i*gap+(gap-barW)/2;
+    const bH=Math.max((v/maxV)*cH,v>0?2:0);
+    const y=pad.t+cH-bH;
+    const isLast=i===values.length-1;
+    ctx.fillStyle=isLast?color:(isDark?'rgba(37,99,235,.25)':'rgba(37,99,235,.15)');
+    const r=4;
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.lineTo(x+barW-r,y);
+    ctx.quadraticCurveTo(x+barW,y,x+barW,y+r);
+    ctx.lineTo(x+barW,y+bH); ctx.lineTo(x,y+bH);
+    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle=textColor; ctx.textAlign='center';
+    ctx.fillText(labels[i],x+barW/2,H-pad.b+14);
+  });
+}
+
+function drawStackedBarChart(canvasId, labels, datasets, {isDark=false}={}){
+  const canvas=q(canvasId); if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.offsetWidth||300, H=canvas.offsetHeight||200;
+  canvas.width=W*window.devicePixelRatio; canvas.height=H*window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
+  ctx.clearRect(0,0,W,H);
+  const pad={l:42,r:10,t:30,b:28};
+  const cW=W-pad.l-pad.r, cH=H-pad.t-pad.b;
+  const totals=labels.map((_,i)=>datasets.reduce((s,d)=>s+(d.data[i]||0),0));
+  const maxV=Math.max(...totals,1);
+  const barW=Math.floor(cW/labels.length*0.55);
+  const gap=cW/labels.length;
+  const textColor=isDark?'#6b6a62':'#9b9a94';
+  ctx.font=`11px -apple-system,system-ui,sans-serif`;
+  for(let i=0;i<=4;i++){
+    const y=pad.t+cH*(1-i/4);
+    ctx.strokeStyle=isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.06)';
+    ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(pad.l+cW,y); ctx.stroke();
+    ctx.fillStyle=textColor; ctx.textAlign='right';
+    ctx.fillText(fmtS(maxV*i/4),pad.l-4,y+4);
+  }
+  labels.forEach((_,i)=>{
+    const x=pad.l+i*gap+(gap-barW)/2;
+    let yOff=0;
+    datasets.forEach((ds,di)=>{
+      const v=ds.data[i]||0;
+      const bH=(v/maxV)*cH;
+      const y=pad.t+cH-yOff-bH;
+      ctx.fillStyle=ds.color;
+      if(di===datasets.length-1){
+        const r=3;
+        ctx.beginPath();
+        ctx.moveTo(x+r,y); ctx.lineTo(x+barW-r,y);
+        ctx.quadraticCurveTo(x+barW,y,x+barW,y+r);
+        ctx.lineTo(x+barW,y+bH); ctx.lineTo(x,y+bH);
+        ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+        ctx.closePath(); ctx.fill();
+      } else {
+        ctx.fillRect(x,y,barW,bH);
+      }
+      yOff+=bH;
+    });
+    ctx.fillStyle=textColor; ctx.textAlign='center';
+    ctx.fillText(labels[i],x+barW/2,H-pad.b+14);
+  });
+  // Legend
+  let lx=pad.l;
+  datasets.forEach(ds=>{
+    ctx.fillStyle=ds.color; ctx.fillRect(lx,10,10,10);
+    ctx.fillStyle=textColor; ctx.textAlign='left';
+    ctx.fillText(ds.label,lx+14,20);
+    lx+=ctx.measureText(ds.label).width+30;
+  });
+}
+
+function drawDonutChart(canvasId, labels, values, colors, {isDark=false}={}){
+  const canvas=q(canvasId); if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.offsetWidth||300, H=canvas.offsetHeight||170;
+  canvas.width=W*window.devicePixelRatio; canvas.height=H*window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
+  ctx.clearRect(0,0,W,H);
+  const total=values.reduce((s,v)=>s+v,0); if(!total)return;
+  const cx=H/2, cy=H/2, outerR=H/2-8, innerR=H/2-30;
+  let angle=-Math.PI/2;
+  const textColor=isDark?'#9b9a8e':'#6b6960';
+  values.forEach((v,i)=>{
+    const slice=2*Math.PI*(v/total);
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,outerR,angle,angle+slice);
+    ctx.closePath(); ctx.fillStyle=colors[i]; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,innerR,0,2*Math.PI);
+    ctx.fillStyle=isDark?'#1a1916':'#fff'; ctx.fill();
+    angle+=slice;
+  });
+  // Legend on the right
+  const legendX=H+10;
+  ctx.font=`11px -apple-system,system-ui,sans-serif`;
+  labels.forEach((lbl,i)=>{
+    const y=16+i*22;
+    if(y>H-8)return;
+    ctx.fillStyle=colors[i]; ctx.fillRect(legendX,y-9,10,10);
+    ctx.fillStyle=textColor; ctx.textAlign='left';
+    const short=lbl.length>10?lbl.substring(0,9)+'…':lbl;
+    ctx.fillText(short,legendX+14,y);
+    ctx.fillStyle=isDark?'#6b6a62':'#b4b2a9';
+    ctx.fillText((v/total*100).toFixed(0)+'%',legendX+14+ctx.measureText(short).width+4,y);
+  });
+}
 
 /* ══════════════════════════════════════════
    STATE
@@ -643,6 +896,9 @@ async function handleAuth(){
     if(authMode==='login'){
       const {error} = await sb.auth.signInWithPassword({email,password});
       if(error) throw error;
+      showLoading();
+      await initApp();
+      return;
     } else {
       const {error} = await sb.auth.signUp({email,password});
       if(error) throw error;
@@ -688,10 +944,10 @@ async function loadAllData(){
   showLoading();
   try {
     const [expRes, pmRes, budRes, settRes] = await Promise.all([
-      sb.from('expenses').select('*').order('date',{ascending:false}),
-      sb.from('payment_methods').select('*').order('created_at'),
-      sb.from('budgets').select('*'),
-      sb.from('user_settings').select('*').single(),
+      sb.from('expenses').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}).select_run(),
+      sb.from('payment_methods').select('*').eq('user_id',currentUser.id).order('created_at').select_run(),
+      sb.from('budgets').select('*').eq('user_id',currentUser.id).select_run(),
+      sb.from('user_settings').select('*').eq('user_id',currentUser.id).single().select_run(),
     ]);
     expenses = expRes.data || [];
     payMethods = pmRes.data || [];
@@ -846,8 +1102,7 @@ function renderDash(){
   for(let i=5;i>=0;i--){let mm=m-i,yy=y;if(mm<0){mm+=12;yy--;}months.push(new Date(yy,mm,1).toLocaleDateString('es-AR',{month:'short'}));vals.push(sum(getMonthExp(mm,yy)))}
   const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
   const tc=isDark?'#9b9a8e':'#6b6960', gc=isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)';
-  if(charts.monthly) charts.monthly.destroy();
-  charts.monthly = new Chart(q('chart-monthly'),{type:'bar',data:{labels:months,datasets:[{data:vals,backgroundColor:vals.map((_,i)=>i===5?'#2563eb':(isDark?'rgba(37,99,235,.25)':'rgba(37,99,235,.15)')),borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'$'+fmt(ctx.raw)}}},scales:{x:{grid:{display:false},ticks:{color:tc,font:{size:11}}},y:{grid:{color:gc},ticks:{color:tc,font:{size:11},callback:v=>fmtS(v)}}}}});
+  drawBarChart('chart-monthly', months, vals, {color:'#2563eb', isDark});
 
   // Heatmap
   renderHeatmap(m,y,cur);
@@ -1144,8 +1399,7 @@ function renderAnalysis(){
   setPeriod(document.querySelector('.period-btn.active')||document.querySelector('.period-btn'),'1m');
 
   const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
-  if(charts.donut) charts.donut.destroy();
-  charts.donut=new Chart(q('chart-donut'),{type:'doughnut',data:{labels:cats.map(c=>c.cat),datasets:[{data:cats.map(c=>c.amount),backgroundColor:cats.map(c=>CATS[c.cat]?.color||'#94a3b8'),borderWidth:2,borderColor:isDark?'#1a1916':'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{display:true,position:'right',labels:{color:isDark?'#9b9a8e':'#6b6960',font:{size:11},boxWidth:10,padding:8}},tooltip:{callbacks:{label:ctx=>ctx.label+': $'+fmt(ctx.raw)}}}}});
+  drawDonutChart('chart-donut', cats.map(c=>c.cat), cats.map(c=>c.amount), cats.map(c=>CATS[c.cat]?.color||'#94a3b8'), {isDark});
 
   const diffPct=sum(prev)?(sum(cur)-sum(prev))/sum(prev)*100:0;
   const mn=now.toLocaleDateString('es-AR',{month:'long'}), mp=new Date(y,m===0?11:m-1).toLocaleDateString('es-AR',{month:'long'});
@@ -1164,8 +1418,7 @@ function setPeriod(el,period){
   for(let i=nM-1;i>=0;i--){let mm=m-i,yy=y;if(mm<0){mm+=12;yy--;}const arr=getMonthExp(mm,yy);labels.push(new Date(yy,mm,1).toLocaleDateString('es-AR',{month:'short'}));vals.push(sum(arr));fixV.push(sum(arr.filter(e=>e.type==='fixed')));varV.push(sum(arr.filter(e=>e.type==='variable')))}
   const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
   const tc=isDark?'#9b9a8e':'#6b6960', gc=isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)';
-  if(charts.analysis) charts.analysis.destroy();
-  charts.analysis=new Chart(q('chart-analysis'),{type:'bar',data:{labels,datasets:[{label:'Fijos',data:fixV,backgroundColor:'rgba(124,58,237,.75)',borderRadius:4,stack:'s'},{label:'Variables',data:varV,backgroundColor:'rgba(217,119,6,.75)',borderRadius:4,stack:'s'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:tc,font:{size:11},boxWidth:10,padding:10}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': $'+fmt(ctx.raw)}}},scales:{x:{stacked:true,grid:{display:false},ticks:{color:tc,font:{size:11}}},y:{stacked:true,grid:{color:gc},ticks:{color:tc,font:{size:11},callback:v=>fmtS(v)}}}}});
+  drawStackedBarChart('chart-analysis', labels, [{data:fixV,color:'rgba(124,58,237,.8)',label:'Fijos'},{data:varV,color:'rgba(217,119,6,.8)',label:'Variables'}], {isDark});
 }
 
 /* ══════════════════════════════════════════
@@ -1234,17 +1487,15 @@ async function importCSV(event){
 /* ══════════════════════════════════════════
    INIT — AUTH LISTENER
 ══════════════════════════════════════════ */
-sb.auth.onAuthStateChange(async(event, session)=>{
+// ── Init: check existing session immediately ──
+async function initApp(){
+  const {data:{session}} = await sb.auth.getSession();
   if(session?.user){
     currentUser = session.user;
-    // Set user initials
     const email = currentUser.email||'';
     q('user-dot').textContent = email.substring(0,2).toUpperCase();
-    // Load data
     await loadAllData();
-    // Update FX display
     q('fx-display').textContent='💱 USD: $'+fmt(fxRates.USD)+' · EUR: $'+fmt(fxRates.EUR);
-    // Show app
     q('auth-screen').classList.add('hidden');
     q('app-screen').classList.remove('hidden');
     q('f-date').value=new Date().toISOString().split('T')[0];
@@ -1252,14 +1503,14 @@ sb.auth.onAuthStateChange(async(event, session)=>{
     renderPMCards();
     renderDash();
   } else {
-    // Show auth
     hideLoading();
     q('app-screen').classList.add('hidden');
     q('auth-screen').classList.remove('hidden');
   }
-});
+}
+initApp();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" defer></script>
+
+
 </body>
 </html>
