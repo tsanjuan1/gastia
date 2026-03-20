@@ -687,17 +687,34 @@ const sb = {
       },
       update(data){
         const q=this._q;
-        return{
-          eq(col,val){this._q2=(q?q+'&':'')+col+'=eq.'+encodeURIComponent(val);return this},
-          select(){return this},single(){this._single=true;return this},
+        let _q2=q;
+        const obj={
+          eq(col,val){_q2=(_q2?_q2+'&':'')+col+'=eq.'+encodeURIComponent(val);return obj},
+          select(){return obj},
+          single(){return obj},
           async then(res,rej){
             try{
-              const r=await sb._rest('PATCH',table,data,this._q2||q);
-              const result=Array.isArray(r)?r[0]:r;
+              // Use fetch directly to ensure correct headers for PATCH
+              const url=`${SUPA_URL}/rest/v1/${table}?${_q2}`;
+              const r=await fetch(url,{
+                method:'PATCH',
+                headers:{
+                  'Content-Type':'application/json',
+                  'apikey':SUPA_KEY,
+                  'Authorization':'Bearer '+(_token||''),
+                  'Prefer':'return=representation',
+                },
+                body:JSON.stringify(data)
+              });
+              if(!r.ok){const e=await r.json();throw new Error(e.message||'PATCH error '+r.status)}
+              const txt=await r.text();
+              const parsed=txt?JSON.parse(txt):null;
+              const result=Array.isArray(parsed)?parsed[0]:parsed;
               res({data:result,error:null});
             }catch(e){rej?rej(e):res({data:null,error:e})}
           }
-        }
+        };
+        return obj;
       },
       delete(){
         const q=this._q;
@@ -1756,19 +1773,26 @@ function editExpense(id){
   editingId=id;
   const e=expenses.find(x=>x.id===id); if(!e) return;
   q('form-title').textContent='Editar gasto';
+  q('submit-btn').disabled=false;
   q('submit-btn').innerHTML='Guardar cambios';
-  curAmount=e.amount.toString(); const amtEl2=q('f-amount'); if(amtEl2){amtEl2.value=curAmount;} onCurrencyChange();
+  curAmount=e.amount.toString();
+  const amtEl2=q('f-amount'); if(amtEl2){amtEl2.value=curAmount;}
   q('f-desc').value=e.description;
   q('f-date').value=e.date;
   q('f-currency').value=e.currency;
   q('f-cat').value=e.category; updateSubcats();
-  q('f-subcat').value=e.subcategory||'';
+  try{ q('f-subcat').value=e.subcategory||''; }catch(_){}
   q('f-merchant').value=e.merchant||'';
   q('f-notes').value=e.notes||'';
   setType(e.type);
+  // Hide installment selector when editing existing expense
+  selectedInstallments=0;
+  q('installment-options').style.display='none';
   selPmId=e.payment_method_id;
   qa('.tag').forEach(t=>t.classList.toggle('active',(e.tags||[]).includes(t.dataset.tag)));
-  showView('add'); renderPMCards();
+  onCurrencyChange();
+  showView('add');
+  renderPMCards();
 }
 
 async function dupExpense(id){
@@ -1907,32 +1931,66 @@ function openBudgetModal(){
 
 /* ── SAVE EXPENSE ── */
 async function saveExpense(){
-  const amtInput=q('f-amount'); if(amtInput) curAmount=amtInput.value||'0';  const amount=parseFloat(curAmount);
+  const amtInput=q('f-amount'); if(amtInput) curAmount=amtInput.value||'0';
+  const amount=parseFloat(curAmount);
   const desc=q('f-desc').value.trim();
   if(!amount||amount<=0){showToast('⚠️ Ingresá un importe');return}
   if(!desc){showToast('⚠️ Ingresá una descripción');return}
   const tags=Array.from(qa('.tag.active')).map(t=>t.dataset.tag);
   const btn=q('submit-btn');
-  btn.disabled=true; btn.innerHTML='<div class="spinner" style="width:18px;height:18px;border-width:2px;margin:0 auto"></div>';
+  const pmId=selPmId||payMethods[0]?.id||null;
+  const expDate=q('f-date').value;
+  const category=q('f-cat').value;
+  const subcategory=q('f-subcat').value;
+  const merchant=q('f-merchant').value.trim();
+  const notes=q('f-notes').value.trim();
+  const currency=q('f-currency').value;
+
+  btn.disabled=true;
+  btn.innerHTML='<div class="spinner" style="width:18px;height:18px;border-width:2px;margin:0 auto"></div>';
+
   try {
-    await dbSaveExpense({
-      id: editingId||null,
-      date: q('f-date').value,
-      amount, currency: q('f-currency').value,
-      description: desc,
-      category: q('f-cat').value,
-      subcategory: q('f-subcat').value,
-      payment_method_id: selPmId||payMethods[0]?.id||null,
-      account: null,
-      merchant: q('f-merchant').value.trim(),
-      notes: q('f-notes').value.trim(),
-      type: selType, tags,
-    });
-    showToast(editingId?'Gasto actualizado ✓':'Gasto guardado ✓');
-    showView('dashboard');
+    // If fixed + cuotas selected + NOT editing existing → create installment plan
+    if(selType==='fixed' && selectedInstallments !== 0 && !editingId){
+      const totalCuotas = selectedInstallments === -1 ? null : selectedInstallments;
+      const plan = {
+        user_id: currentUser.id,
+        description: desc,
+        amount_per_installment: amount,
+        currency,
+        total_installments: totalCuotas,
+        paid_installments: 0,
+        start_date: expDate,
+        last_generated_date: null,
+        category, subcategory,
+        payment_method_id: pmId,
+        merchant: merchant||null,
+        tags, status:'active',
+      };
+      const {data:planData, error:planErr} = await sb.from('installment_plans').insert(plan).select().single();
+      if(planErr) throw planErr;
+      installmentPlans.push(planData);
+      // Generate first installment expense now
+      await generatePendingInstallments();
+      showToast('Plan de cuotas creado ✓');
+      showView('dashboard');
+    } else {
+      // Regular expense (no cuotas, or editing)
+      await dbSaveExpense({
+        id: editingId||null,
+        date: expDate, amount, currency,
+        description: desc, category, subcategory,
+        payment_method_id: pmId,
+        account: null, merchant, notes,
+        type: selType, tags,
+      });
+      showToast(editingId?'Gasto actualizado ✓':'Gasto guardado ✓');
+      showView('dashboard');
+    }
   } catch(err){
     showToast('Error al guardar: '+err.message);
-    btn.disabled=false; btn.innerHTML=editingId?'Guardar cambios':'Guardar gasto';
+    btn.disabled=false;
+    btn.innerHTML=editingId?'Guardar cambios':'Guardar gasto';
   }
 }
 
