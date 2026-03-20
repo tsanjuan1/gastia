@@ -1092,7 +1092,16 @@ async function sendChatMessage(){
       body: JSON.stringify({ message: text, context }),
     });
 
-    const data = await res.json();
+    // Parse response - handle both raw JSON and text responses
+    let data;
+    try {
+      const rawText = await res.text();
+      // Strip markdown code fences if present
+      const cleaned = rawText.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
+      data = JSON.parse(cleaned);
+    } catch(parseErr) {
+      data = { action: 'answer', data: null, message: 'Respuesta inválida del servidor.' };
+    }
     removeTyping();
 
     if(data.action === 'create_expense'){
@@ -1853,7 +1862,16 @@ async function sendChatMessage(){
       body: JSON.stringify({ message: text, context }),
     });
 
-    const data = await res.json();
+    // Parse response - handle both raw JSON and text responses
+    let data;
+    try {
+      const rawText = await res.text();
+      // Strip markdown code fences if present
+      const cleaned = rawText.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
+      data = JSON.parse(cleaned);
+    } catch(parseErr) {
+      data = { action: 'answer', data: null, message: 'Respuesta inválida del servidor.' };
+    }
     removeTyping();
 
     if(data.action === 'create_expense'){
