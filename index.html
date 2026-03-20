@@ -309,7 +309,7 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
       </div>
       <div class="section">
         <div class="sec-head"><div class="sec-title">Evolución mensual</div></div>
-        <div class="card" style="padding:12px 14px 10px"><div style="position:relative;height:180px"><canvas id="chart-monthly"></canvas></div></div>
+        <div class="card" style="padding:12px 14px 10px"><div style="position:relative;width:100%;height:180px;overflow:hidden"><canvas id="chart-monthly" style="display:block;width:100%;height:180px"></canvas></div></div>
       </div>
       <div class="section">
         <div class="sec-head"><div class="sec-title">Calendario de gastos</div></div>
@@ -428,7 +428,7 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
           <button class="period-btn" onclick="setPeriod(this,'6m')">6M</button>
           <button class="period-btn" onclick="setPeriod(this,'1y')">1A</button>
         </div>
-        <div class="card" style="margin-top:10px;padding:12px 14px 10px"><div style="position:relative;height:200px"><canvas id="chart-analysis"></canvas></div></div>
+        <div class="card" style="margin-top:10px;padding:12px 14px 10px"><div style="position:relative;width:100%;height:200px;overflow:hidden"><canvas id="chart-analysis" style="display:block;width:100%;height:200px"></canvas></div></div>
       </div>
       <div class="section">
         <div class="sec-head"><div class="sec-title">Por categoría</div></div>
@@ -436,7 +436,7 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
       </div>
       <div class="section">
         <div class="sec-head"><div class="sec-title">Distribución</div></div>
-        <div class="card" style="padding:12px 14px 10px"><div style="position:relative;height:170px"><canvas id="chart-donut"></canvas></div></div>
+        <div class="card" style="padding:12px 14px 10px"><div style="position:relative;width:100%;height:170px;overflow:hidden"><canvas id="chart-donut" style="display:block;width:100%;height:170px"></canvas></div></div>
       </div>
       <div class="section">
         <div class="sec-head"><div class="sec-title">Comparación de períodos</div></div>
@@ -689,8 +689,12 @@ const CARD_NETWORKS = ['Visa','Mastercard','Amex','Naranja','Cabal','Débito','E
 function drawBarChart(canvasId, labels, values, {color='#2563eb', isDark=false}={}){
   const canvas=q(canvasId); if(!canvas)return;
   const ctx=canvas.getContext('2d');
-  const W=canvas.offsetWidth||300, H=canvas.offsetHeight||180;
-  canvas.width=W*window.devicePixelRatio; canvas.height=H*window.devicePixelRatio;
+  const parent=canvas.parentElement;
+  const W=parent?parent.clientWidth||parent.offsetWidth||300:300;
+  const H=parent?parent.clientHeight||parent.offsetHeight||180:180;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  canvas.width=Math.round(W*window.devicePixelRatio);
+  canvas.height=Math.round(H*window.devicePixelRatio);
   ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
   ctx.clearRect(0,0,W,H);
   const pad={l:40,r:10,t:10,b:28};
@@ -729,8 +733,12 @@ function drawBarChart(canvasId, labels, values, {color='#2563eb', isDark=false}=
 function drawStackedBarChart(canvasId, labels, datasets, {isDark=false}={}){
   const canvas=q(canvasId); if(!canvas)return;
   const ctx=canvas.getContext('2d');
-  const W=canvas.offsetWidth||300, H=canvas.offsetHeight||200;
-  canvas.width=W*window.devicePixelRatio; canvas.height=H*window.devicePixelRatio;
+  const parent=canvas.parentElement;
+  const W=parent?parent.clientWidth||parent.offsetWidth||300:300;
+  const H=parent?parent.clientHeight||parent.offsetHeight||200:200;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  canvas.width=Math.round(W*window.devicePixelRatio);
+  canvas.height=Math.round(H*window.devicePixelRatio);
   ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
   ctx.clearRect(0,0,W,H);
   const pad={l:42,r:10,t:30,b:28};
@@ -785,8 +793,12 @@ function drawStackedBarChart(canvasId, labels, datasets, {isDark=false}={}){
 function drawDonutChart(canvasId, labels, values, colors, {isDark=false}={}){
   const canvas=q(canvasId); if(!canvas)return;
   const ctx=canvas.getContext('2d');
-  const W=canvas.offsetWidth||300, H=canvas.offsetHeight||170;
-  canvas.width=W*window.devicePixelRatio; canvas.height=H*window.devicePixelRatio;
+  const parent=canvas.parentElement;
+  const W=parent?parent.clientWidth||parent.offsetWidth||300:300;
+  const H=parent?parent.clientHeight||parent.offsetHeight||170:170;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  canvas.width=Math.round(W*window.devicePixelRatio);
+  canvas.height=Math.round(H*window.devicePixelRatio);
   ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
   ctx.clearRect(0,0,W,H);
   const total=values.reduce((s,v)=>s+v,0); if(!total)return;
@@ -897,7 +909,14 @@ async function handleAuth(){
       const {error} = await sb.auth.signInWithPassword({email,password});
       if(error) throw error;
       showLoading();
-      await initApp();
+      await 
+// Redraw charts on resize/orientation change
+window.addEventListener('resize', ()=>{
+  if(activeView==='dashboard') renderDash();
+  if(activeView==='analysis') renderAnalysis();
+});
+
+initApp();
       return;
     } else {
       const {error} = await sb.auth.signUp({email,password});
@@ -1102,7 +1121,7 @@ function renderDash(){
   for(let i=5;i>=0;i--){let mm=m-i,yy=y;if(mm<0){mm+=12;yy--;}months.push(new Date(yy,mm,1).toLocaleDateString('es-AR',{month:'short'}));vals.push(sum(getMonthExp(mm,yy)))}
   const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
   const tc=isDark?'#9b9a8e':'#6b6960', gc=isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)';
-  drawBarChart('chart-monthly', months, vals, {color:'#2563eb', isDark});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>drawBarChart('chart-monthly', months, vals, {color:'#2563eb', isDark})));
 
   // Heatmap
   renderHeatmap(m,y,cur);
@@ -1399,7 +1418,7 @@ function renderAnalysis(){
   setPeriod(document.querySelector('.period-btn.active')||document.querySelector('.period-btn'),'1m');
 
   const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
-  drawDonutChart('chart-donut', cats.map(c=>c.cat), cats.map(c=>c.amount), cats.map(c=>CATS[c.cat]?.color||'#94a3b8'), {isDark});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>drawDonutChart('chart-donut', cats.map(c=>c.cat), cats.map(c=>c.amount), cats.map(c=>CATS[c.cat]?.color||'#94a3b8'), {isDark})));
 
   const diffPct=sum(prev)?(sum(cur)-sum(prev))/sum(prev)*100:0;
   const mn=now.toLocaleDateString('es-AR',{month:'long'}), mp=new Date(y,m===0?11:m-1).toLocaleDateString('es-AR',{month:'long'});
@@ -1418,7 +1437,7 @@ function setPeriod(el,period){
   for(let i=nM-1;i>=0;i--){let mm=m-i,yy=y;if(mm<0){mm+=12;yy--;}const arr=getMonthExp(mm,yy);labels.push(new Date(yy,mm,1).toLocaleDateString('es-AR',{month:'short'}));vals.push(sum(arr));fixV.push(sum(arr.filter(e=>e.type==='fixed')));varV.push(sum(arr.filter(e=>e.type==='variable')))}
   const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
   const tc=isDark?'#9b9a8e':'#6b6960', gc=isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)';
-  drawStackedBarChart('chart-analysis', labels, [{data:fixV,color:'rgba(124,58,237,.8)',label:'Fijos'},{data:varV,color:'rgba(217,119,6,.8)',label:'Variables'}], {isDark});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>drawStackedBarChart('chart-analysis', labels, [{data:fixV,color:'rgba(124,58,237,.8)',label:'Fijos'},{data:varV,color:'rgba(217,119,6,.8)',label:'Variables'}], {isDark})));
 }
 
 /* ══════════════════════════════════════════
@@ -1508,6 +1527,13 @@ async function initApp(){
     q('auth-screen').classList.remove('hidden');
   }
 }
+
+// Redraw charts on resize/orientation change
+window.addEventListener('resize', ()=>{
+  if(activeView==='dashboard') renderDash();
+  if(activeView==='analysis') renderAnalysis();
+});
+
 initApp();
 </script>
 
