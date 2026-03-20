@@ -242,6 +242,46 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 
 input[type=number]{-moz-appearance:textfield}
 input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+
+/* ── AI CHAT ── */
+.chat-fab{position:fixed;bottom:calc(80px + env(safe-area-inset-bottom));right:16px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(124,58,237,.4);z-index:200;transition:all .2s}
+.chat-fab:active{transform:scale(.92)}
+.chat-fab .chat-fab-badge{position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:#ef4444;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
+#chat-panel{position:fixed;inset:0;z-index:250;display:flex;flex-direction:column;background:var(--bg);transform:translateY(100%);transition:transform .3s cubic-bezier(.25,.8,.25,1)}
+#chat-panel.open{transform:translateY(0)}
+.chat-header{flex-shrink:0;padding:14px 16px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.chat-header-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#2563eb);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.chat-header-info{flex:1}
+.chat-header-name{font-size:14px;font-weight:600;color:var(--text)}
+.chat-header-status{font-size:11px;color:var(--green);display:flex;align-items:center;gap:4px}
+.chat-header-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green)}
+.chat-close{width:32px;height:32px;border-radius:50%;border:none;background:var(--surface2);cursor:pointer;font-size:16px;color:var(--text2);display:flex;align-items:center;justify-content:center}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.chat-msg{display:flex;gap:8px;max-width:85%}
+.chat-msg.user{align-self:flex-end;flex-direction:row-reverse}
+.chat-msg-bubble{padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.5}
+.chat-msg.ai .chat-msg-bubble{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:4px 18px 18px 18px}
+.chat-msg.user .chat-msg-bubble{background:var(--accent);color:#fff;border-radius:18px 4px 18px 18px}
+.chat-msg-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#2563eb);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;align-self:flex-end}
+.chat-success-card{background:var(--green-l);border:1px solid var(--green);border-radius:12px;padding:10px 14px;margin-top:6px;font-size:13px;color:var(--green)}
+.chat-success-card .success-title{font-weight:600;margin-bottom:3px}
+.chat-success-card .success-detail{font-size:12px;opacity:.8}
+.chat-typing{display:flex;gap:4px;align-items:center;padding:10px 14px}
+.chat-typing span{width:7px;height:7px;border-radius:50%;background:var(--text3);animation:typing .9s infinite}
+.chat-typing span:nth-child(2){animation-delay:.2s}
+.chat-typing span:nth-child(3){animation-delay:.4s}
+@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+.chat-input-bar{flex-shrink:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--border);display:flex;gap:10px;align-items:flex-end}
+.chat-input{flex:1;min-height:40px;max-height:120px;border-radius:20px;border:1.5px solid var(--border2);background:var(--surface2);padding:9px 16px;font-family:var(--font);font-size:14px;color:var(--text);resize:none;line-height:1.4;overflow-y:auto}
+.chat-input:focus{outline:none;border-color:var(--accent)}
+.chat-send-btn{width:40px;height:40px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.chat-send-btn:active{transform:scale(.92)}
+.chat-send-btn:disabled{opacity:.5;cursor:not-allowed}
+.chat-suggestions{display:flex;gap:8px;overflow-x:auto;padding:0 16px 10px;scrollbar-width:none;flex-shrink:0}
+.chat-suggestions::-webkit-scrollbar{display:none}
+.chat-suggestion{flex-shrink:0;padding:7px 14px;border-radius:99px;border:1px solid var(--border2);background:var(--surface);font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;white-space:nowrap;transition:all .15s}
+.chat-suggestion:hover{background:var(--accent-l);border-color:var(--accent);color:var(--accent)}
+
 </style>
 </head>
 <body>
@@ -508,6 +548,36 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
       <span>Config</span>
     </div>
   </nav>
+
+  <!-- AI CHAT FAB -->
+  <button class="chat-fab" onclick="openChat()" id="chat-fab" title="Asistente IA">
+    🤖
+  </button>
+
+  <!-- AI CHAT PANEL -->
+  <div id="chat-panel">
+    <div class="chat-header">
+      <div class="chat-header-avatar">🤖</div>
+      <div class="chat-header-info">
+        <div class="chat-header-name">Gastia AI</div>
+        <div class="chat-header-status">En línea</div>
+      </div>
+      <button class="chat-close" onclick="closeChat()">✕</button>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-suggestions" id="chat-suggestions">
+      <div class="chat-suggestion" onclick="useSuggestion(this)">Café $2500 efectivo</div>
+      <div class="chat-suggestion" onclick="useSuggestion(this)">Súper $45000 débito</div>
+      <div class="chat-suggestion" onclick="useSuggestion(this)">Netflix fijo $12000</div>
+      <div class="chat-suggestion" onclick="useSuggestion(this)">¿Cuánto gasté este mes?</div>
+      <div class="chat-suggestion" onclick="useSuggestion(this)">Top categorías</div>
+    </div>
+    <div class="chat-input-bar">
+      <textarea class="chat-input" id="chat-input" placeholder="Decime qué gasto querés cargar..." rows="1" onkeydown="chatKeydown(event)" oninput="autoResize(this)"></textarea>
+      <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">↑</button>
+    </div>
+  </div>
+
 </div><!-- /app-screen -->
 
 <!-- MODAL -->
@@ -915,6 +985,149 @@ window.addEventListener('resize', ()=>{
   if(activeView==='dashboard') renderDash();
   if(activeView==='analysis') renderAnalysis();
 });
+
+/* ══════════════════════════════════════════
+   AI CHAT
+══════════════════════════════════════════ */
+let chatOpen = false;
+let chatHistory = [];
+
+function openChat(){
+  chatOpen = true;
+  q('chat-panel').classList.add('open');
+  if(chatHistory.length === 0) addAIMessage('¡Hola! Soy tu asistente de gastos. Podés decirme cosas como:\n\n• *"Almuerzo $8500 con débito en McDonalds"*\n• *"Netflix fijo $12000 crédito"*\n• *"¿Cuánto gasté este mes?"*\n\nO usá los accesos rápidos de abajo 👇');
+  setTimeout(()=>q('chat-input').focus(), 300);
+}
+
+function closeChat(){
+  chatOpen = false;
+  q('chat-panel').classList.remove('open');
+}
+
+function chatKeydown(e){
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChatMessage() }
+}
+
+function autoResize(el){
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function useSuggestion(el){
+  q('chat-input').value = el.textContent;
+  autoResize(q('chat-input'));
+  sendChatMessage();
+}
+
+function addUserMessage(text){
+  const msgs = q('chat-messages');
+  msgs.innerHTML += `<div class="chat-msg user"><div class="chat-msg-bubble">${escHtml(text)}</div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addAIMessage(text, expenseData=null){
+  const msgs = q('chat-messages');
+  let extra = '';
+  if(expenseData){
+    const sym = expenseData.currency==='USD'?'U$S ':expenseData.currency==='EUR'?'€ ':'$';
+    extra = `<div class="chat-success-card">
+      <div class="success-title">✅ Gasto cargado</div>
+      <div class="success-detail">${sym}${fmt(expenseData.amount)} · ${expenseData.category} · ${expenseData.description}</div>
+    </div>`;
+  }
+  // Convert *text* to <em>text</em> for simple markdown
+  const formatted = escHtml(text).replace(/\n/g,'<br>').replace(/\*(.*?)\*/g,'<em>$1</em>');
+  msgs.innerHTML += `<div class="chat-msg ai"><div class="chat-msg-avatar">🤖</div><div><div class="chat-msg-bubble">${formatted}</div>${extra}</div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addTyping(){
+  const msgs = q('chat-messages');
+  msgs.innerHTML += `<div class="chat-msg ai" id="chat-typing"><div class="chat-msg-avatar">🤖</div><div class="chat-typing"><span></span><span></span><span></span></div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeTyping(){ const t=q('chat-typing'); if(t) t.remove() }
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+function buildContext(){
+  const now = new Date(), m = now.getMonth(), y = now.getFullYear();
+  const cur = getMonthExp(m, y);
+  const total = sum(cur);
+  const cats = getCatStats(cur).slice(0,5).map(c=>`${c.cat}: $${fmt(c.amount)} (${c.pct.toFixed(0)}%)`).join(', ');
+  const summary = cur.length === 0
+    ? 'Sin gastos este mes todavía.'
+    : `Total mes: $${fmt(total)}. ${cur.length} transacciones. Top categorías: ${cats}. Fijos: $${fmt(sum(cur.filter(e=>e.type==='fixed')))}, Variables: $${fmt(sum(cur.filter(e=>e.type==='variable')))}`;
+  return {
+    categories: Object.keys(CATS),
+    paymentMethods: payMethods.map(p=>({id:p.id, name:p.name})),
+    summary,
+  };
+}
+
+async function sendChatMessage(){
+  const input = q('chat-input');
+  const text = input.value.trim();
+  if(!text) return;
+
+  const btn = q('chat-send-btn');
+  input.value = ''; input.style.height = 'auto';
+  btn.disabled = true;
+
+  addUserMessage(text);
+  chatHistory.push({role:'user', content:text});
+  addTyping();
+
+  try {
+    const context = buildContext();
+    // Call Supabase Edge Function as proxy
+    const res = await fetch(`${SUPA_URL}/functions/v1/ai-assistant`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + _token,
+        'apikey': SUPA_KEY,
+      },
+      body: JSON.stringify({ message: text, context }),
+    });
+
+    const data = await res.json();
+    removeTyping();
+
+    if(data.action === 'create_expense'){
+      // Save the expense
+      const expData = data.data;
+      // Validate required fields
+      if(!expData.amount || !expData.description){
+        addAIMessage('No pude entender bien el gasto. ¿Podés dar más detalles? Por ejemplo: *"Almuerzo $8500 débito"*');
+      } else {
+        // Find matching payment method if name given instead of id
+        if(!expData.payment_method_id && expData.payment_method_name){
+          const pm = payMethods.find(p=>p.name.toLowerCase().includes(expData.payment_method_name.toLowerCase()));
+          if(pm) expData.payment_method_id = pm.id;
+        }
+        if(!expData.payment_method_id) expData.payment_method_id = payMethods[0]?.id;
+        
+        const saved = await dbSaveExpense(expData);
+        addAIMessage(data.message || '¡Listo! Gasto cargado.', saved);
+        // Refresh dashboard if visible
+        if(activeView === 'dashboard') renderDash();
+        if(activeView === 'list') renderList();
+      }
+    } else {
+      addAIMessage(data.message || 'No entendí bien. Intentá de nuevo.');
+    }
+
+  } catch(err){
+    removeTyping();
+    addAIMessage('Hubo un error conectando con el asistente. Verificá tu conexión.');
+    console.error(err);
+  }
+
+  btn.disabled = false;
+  q('chat-messages').scrollTop = q('chat-messages').scrollHeight;
+}
 
 initApp();
       return;
@@ -1533,6 +1746,149 @@ window.addEventListener('resize', ()=>{
   if(activeView==='dashboard') renderDash();
   if(activeView==='analysis') renderAnalysis();
 });
+
+/* ══════════════════════════════════════════
+   AI CHAT
+══════════════════════════════════════════ */
+let chatOpen = false;
+let chatHistory = [];
+
+function openChat(){
+  chatOpen = true;
+  q('chat-panel').classList.add('open');
+  if(chatHistory.length === 0) addAIMessage('¡Hola! Soy tu asistente de gastos. Podés decirme cosas como:\n\n• *"Almuerzo $8500 con débito en McDonalds"*\n• *"Netflix fijo $12000 crédito"*\n• *"¿Cuánto gasté este mes?"*\n\nO usá los accesos rápidos de abajo 👇');
+  setTimeout(()=>q('chat-input').focus(), 300);
+}
+
+function closeChat(){
+  chatOpen = false;
+  q('chat-panel').classList.remove('open');
+}
+
+function chatKeydown(e){
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChatMessage() }
+}
+
+function autoResize(el){
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function useSuggestion(el){
+  q('chat-input').value = el.textContent;
+  autoResize(q('chat-input'));
+  sendChatMessage();
+}
+
+function addUserMessage(text){
+  const msgs = q('chat-messages');
+  msgs.innerHTML += `<div class="chat-msg user"><div class="chat-msg-bubble">${escHtml(text)}</div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addAIMessage(text, expenseData=null){
+  const msgs = q('chat-messages');
+  let extra = '';
+  if(expenseData){
+    const sym = expenseData.currency==='USD'?'U$S ':expenseData.currency==='EUR'?'€ ':'$';
+    extra = `<div class="chat-success-card">
+      <div class="success-title">✅ Gasto cargado</div>
+      <div class="success-detail">${sym}${fmt(expenseData.amount)} · ${expenseData.category} · ${expenseData.description}</div>
+    </div>`;
+  }
+  // Convert *text* to <em>text</em> for simple markdown
+  const formatted = escHtml(text).replace(/\n/g,'<br>').replace(/\*(.*?)\*/g,'<em>$1</em>');
+  msgs.innerHTML += `<div class="chat-msg ai"><div class="chat-msg-avatar">🤖</div><div><div class="chat-msg-bubble">${formatted}</div>${extra}</div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addTyping(){
+  const msgs = q('chat-messages');
+  msgs.innerHTML += `<div class="chat-msg ai" id="chat-typing"><div class="chat-msg-avatar">🤖</div><div class="chat-typing"><span></span><span></span><span></span></div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeTyping(){ const t=q('chat-typing'); if(t) t.remove() }
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+function buildContext(){
+  const now = new Date(), m = now.getMonth(), y = now.getFullYear();
+  const cur = getMonthExp(m, y);
+  const total = sum(cur);
+  const cats = getCatStats(cur).slice(0,5).map(c=>`${c.cat}: $${fmt(c.amount)} (${c.pct.toFixed(0)}%)`).join(', ');
+  const summary = cur.length === 0
+    ? 'Sin gastos este mes todavía.'
+    : `Total mes: $${fmt(total)}. ${cur.length} transacciones. Top categorías: ${cats}. Fijos: $${fmt(sum(cur.filter(e=>e.type==='fixed')))}, Variables: $${fmt(sum(cur.filter(e=>e.type==='variable')))}`;
+  return {
+    categories: Object.keys(CATS),
+    paymentMethods: payMethods.map(p=>({id:p.id, name:p.name})),
+    summary,
+  };
+}
+
+async function sendChatMessage(){
+  const input = q('chat-input');
+  const text = input.value.trim();
+  if(!text) return;
+
+  const btn = q('chat-send-btn');
+  input.value = ''; input.style.height = 'auto';
+  btn.disabled = true;
+
+  addUserMessage(text);
+  chatHistory.push({role:'user', content:text});
+  addTyping();
+
+  try {
+    const context = buildContext();
+    // Call Supabase Edge Function as proxy
+    const res = await fetch(`${SUPA_URL}/functions/v1/ai-assistant`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + _token,
+        'apikey': SUPA_KEY,
+      },
+      body: JSON.stringify({ message: text, context }),
+    });
+
+    const data = await res.json();
+    removeTyping();
+
+    if(data.action === 'create_expense'){
+      // Save the expense
+      const expData = data.data;
+      // Validate required fields
+      if(!expData.amount || !expData.description){
+        addAIMessage('No pude entender bien el gasto. ¿Podés dar más detalles? Por ejemplo: *"Almuerzo $8500 débito"*');
+      } else {
+        // Find matching payment method if name given instead of id
+        if(!expData.payment_method_id && expData.payment_method_name){
+          const pm = payMethods.find(p=>p.name.toLowerCase().includes(expData.payment_method_name.toLowerCase()));
+          if(pm) expData.payment_method_id = pm.id;
+        }
+        if(!expData.payment_method_id) expData.payment_method_id = payMethods[0]?.id;
+        
+        const saved = await dbSaveExpense(expData);
+        addAIMessage(data.message || '¡Listo! Gasto cargado.', saved);
+        // Refresh dashboard if visible
+        if(activeView === 'dashboard') renderDash();
+        if(activeView === 'list') renderList();
+      }
+    } else {
+      addAIMessage(data.message || 'No entendí bien. Intentá de nuevo.');
+    }
+
+  } catch(err){
+    removeTyping();
+    addAIMessage('Hubo un error conectando con el asistente. Verificá tu conexión.');
+    console.error(err);
+  }
+
+  btn.disabled = false;
+  q('chat-messages').scrollTop = q('chat-messages').scrollHeight;
+}
 
 initApp();
 </script>
