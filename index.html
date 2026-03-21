@@ -1035,7 +1035,17 @@ function getMerchants(arr){
   arr.forEach(e=>{if(!e.merchant)return;if(!map[e.merchant])map[e.merchant]={count:0,amount:0};map[e.merchant].count++;map[e.merchant].amount+=toARS(e)});
   return Object.entries(map).map(([merchant,v])=>({merchant,...v})).sort((a,b)=>b.amount-a.amount).slice(0,5);
 }
-function getMonthExp(m,y){ return expenses.filter(e=>{const d=new Date(e.date);return d.getMonth()===m&&d.getFullYear()===y}) }
+function parseLocalDate(str){
+  // Parse YYYY-MM-DD without timezone conversion
+  const [y,m,d]=str.split('-').map(Number);
+  return {year:y, month:m-1, day:d}; // month is 0-based
+}
+function getMonthExp(m,y){
+  return expenses.filter(e=>{
+    const p=parseLocalDate(e.date);
+    return p.month===m && p.year===y;
+  });
+}
 
 /* ══════════════════════════════════════════
    AUTH
@@ -1287,8 +1297,11 @@ async function generatePendingInstallments(){
       continue;
     }
 
-    // Generate expense
-    const expDate = `${thisYear}-${String(thisMonthNum+1).padStart(2,'0')}-01`;
+    // Generate expense - use today's date for first installment, 1st of month for future ones
+    const isFirstInstallment = instNumber === 1;
+    const expDate = isFirstInstallment
+      ? `${thisYear}-${String(thisMonthNum+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+      : `${thisYear}-${String(thisMonthNum+1).padStart(2,'0')}-01`;
     const totalLabel = plan.total_installments ? `/${plan.total_installments}` : '/∞';
     try {
       await dbSaveExpense({
@@ -2371,8 +2384,11 @@ async function generatePendingInstallments(){
       continue;
     }
 
-    // Generate expense
-    const expDate = `${thisYear}-${String(thisMonthNum+1).padStart(2,'0')}-01`;
+    // Generate expense - use today's date for first installment, 1st of month for future ones
+    const isFirstInstallment = instNumber === 1;
+    const expDate = isFirstInstallment
+      ? `${thisYear}-${String(thisMonthNum+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+      : `${thisYear}-${String(thisMonthNum+1).padStart(2,'0')}-01`;
     const totalLabel = plan.total_installments ? `/${plan.total_installments}` : '/∞';
     try {
       await dbSaveExpense({
