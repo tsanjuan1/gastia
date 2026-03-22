@@ -1,0 +1,12 @@
+{
+  "name": "Gastia",
+  "short_name": "Gastia",
+  "start_url": "/gastia/",
+  "display": "standalone",
+  "background_color": "#f7f6f2",
+  "theme_color": "#2563eb",
+  "icons": [
+    {"src": "/gastia/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/gastia/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}
+  ]
+}
