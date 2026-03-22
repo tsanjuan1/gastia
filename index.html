@@ -656,9 +656,38 @@ const sb = {
   },
   async _rest(method,table,body=null,query=''){
     const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${query}`,{method,headers:this._headers(),body:body?JSON.stringify(body):null});
-    if(!r.ok){const e=await r.json();throw new Error(e.message||e.error_description||'Error '+r.status)}
+    if(r.status===401){
+      // Token expired mid-session — try to refresh and retry once
+      const refreshed = await this._tryRefresh();
+      if(refreshed){
+        const r2 = await fetch(`${SUPA_URL}/rest/v1/${table}?${query}`,{method,headers:this._headers(),body:body?JSON.stringify(body):null});
+        if(!r2.ok){const e=await r2.json().catch(()=>({message:'HTTP '+r2.status}));throw new Error(e.message||e.error_description||'Error '+r2.status)}
+        const txt2=await r2.text();return txt2?JSON.parse(txt2):null;
+      } else {
+        // Refresh failed — force re-login
+        localStorage.removeItem('gastia_session');_token=null;
+        showToast('Sesión vencida. Por favor ingresá de nuevo.');
+        setTimeout(()=>{handleSignOut&&handleSignOut()},1500);
+        throw new Error('Sesión vencida');
+      }
+    }
+    if(!r.ok){const e=await r.json().catch(()=>({message:'HTTP '+r.status}));throw new Error(e.message||e.error_description||'Error '+r.status)}
     const txt=await r.text();
     return txt?JSON.parse(txt):null;
+  },
+  async _tryRefresh(){
+    const sess=localStorage.getItem('gastia_session');
+    if(!sess)return false;
+    try{
+      const {refresh_token}=JSON.parse(sess);
+      if(!refresh_token)return false;
+      const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY},body:JSON.stringify({refresh_token})});
+      if(!r.ok)return false;
+      const d=await r.json();
+      _token=d.access_token;_refreshToken=d.refresh_token;
+      localStorage.setItem('gastia_session',JSON.stringify({access_token:d.access_token,refresh_token:d.refresh_token,user:d.user||JSON.parse(sess).user}));
+      return true;
+    }catch(e){return false;}
   },
   from(table){
     return {
@@ -1501,6 +1530,24 @@ async function deleteInstallmentPlan(planId){
 }
 
 initApp();
+
+// Proactive token refresh every 10 minutes (tokens expire after 1 hour)
+setInterval(async()=>{
+  if(!_token)return;
+  try{
+    const sess=localStorage.getItem('gastia_session');
+    if(!sess)return;
+    const {refresh_token}=JSON.parse(sess);
+    if(!refresh_token)return;
+    // Check if token expires in less than 15 minutes
+    const pl=JSON.parse(atob(_token.split('.')[1]));
+    const expiresIn=(pl.exp*1000-Date.now())/1000;
+    if(expiresIn<900){ // less than 15 min
+      const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY},body:JSON.stringify({refresh_token})});
+      if(r.ok){const d=await r.json();_token=d.access_token;_refreshToken=d.refresh_token;localStorage.setItem('gastia_session',JSON.stringify({access_token:d.access_token,refresh_token:d.refresh_token,user:d.user||JSON.parse(sess).user}));}
+    }
+  }catch(e){console.log('Token refresh check:',e.message)}
+},10*60*1000);
       return;
     } else {
       const {error} = await sb.auth.signUp({email,password});
@@ -1670,12 +1717,13 @@ function showView(name){
   qa('.view').forEach(v=>v.classList.remove('active'));
   qa('.nav-item').forEach(n=>n.classList.remove('active'));
   q('view-'+name).classList.add('active');
-  q('nav-'+name).classList.add('active');
+  q('nav-'+name)?.classList.add('active');
   activeView = name;
   if(name==='dashboard') renderDash();
   if(name==='list') renderList();
   if(name==='analysis') renderAnalysis();
   if(name==='config') renderConfig();
+  if(name==='add'&&!editingId) resetForm(); // always reset when opening for new expense
   if(name==='add') resetForm();
   q('content').scrollTop = 0;
 }
@@ -1828,8 +1876,6 @@ function editExpense(id){
   q('form-title').textContent='Editar gasto';
   q('submit-btn').disabled=false;
   q('submit-btn').innerHTML='Guardar cambios';
-  curAmount=e.amount.toString();
-  const amtEl2=q('f-amount'); if(amtEl2){amtEl2.value=curAmount;}
   q('f-desc').value=e.description;
   q('f-date').value=e.date;
   q('f-currency').value=e.currency;
@@ -1843,8 +1889,12 @@ function editExpense(id){
   q('installment-options').style.display='none';
   selPmId=e.payment_method_id;
   qa('.tag').forEach(t=>t.classList.toggle('active',(e.tags||[]).includes(t.dataset.tag)));
+  showView('add');  // show view first so DOM is visible
+  // Then set amount display after view is active
+  curAmount=e.amount.toString();
+  const amtElPost=q('f-amount');
+  if(amtElPost){ amtElPost.value=curAmount; }
   onCurrencyChange();
-  showView('add');
   renderPMCards();
 }
 
@@ -1878,7 +1928,9 @@ async function delExpense(id){
 function resetForm(){
   editingId=null;
   q('form-title').textContent='Nuevo gasto';
-  q('submit-btn').innerHTML='Guardar gasto';
+  const btn=q('submit-btn');
+  btn.innerHTML='Guardar gasto';
+  btn.disabled=false; // always re-enable
   curAmount='0'; const amtEl=q('f-amount'); if(amtEl){amtEl.value='';} updateAmtDisplay();
   q('f-desc').value='';
   q('f-date').value=localDateStr();
@@ -2038,6 +2090,7 @@ async function saveExpense(){
         type: selType, tags,
       });
       showToast(editingId?'Gasto actualizado ✓':'Gasto guardado ✓');
+      editingId=null; // clear before showView so resetForm works correctly
       showView('dashboard');
     }
   } catch(err){
@@ -2590,6 +2643,24 @@ async function deleteInstallmentPlan(planId){
 }
 
 initApp();
+
+// Proactive token refresh every 10 minutes (tokens expire after 1 hour)
+setInterval(async()=>{
+  if(!_token)return;
+  try{
+    const sess=localStorage.getItem('gastia_session');
+    if(!sess)return;
+    const {refresh_token}=JSON.parse(sess);
+    if(!refresh_token)return;
+    // Check if token expires in less than 15 minutes
+    const pl=JSON.parse(atob(_token.split('.')[1]));
+    const expiresIn=(pl.exp*1000-Date.now())/1000;
+    if(expiresIn<900){ // less than 15 min
+      const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY},body:JSON.stringify({refresh_token})});
+      if(r.ok){const d=await r.json();_token=d.access_token;_refreshToken=d.refresh_token;localStorage.setItem('gastia_session',JSON.stringify({access_token:d.access_token,refresh_token:d.refresh_token,user:d.user||JSON.parse(sess).user}));}
+    }
+  }catch(e){console.log('Token refresh check:',e.message)}
+},10*60*1000);
 </script>
 
 
