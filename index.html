@@ -8,6 +8,31 @@
 <meta name="apple-mobile-web-app-title" content="Gastia">
 <title>Gastia — Control de Gastos</title>
 <link rel="preconnect" href="https://lxlqgkwiapyehumbfzdm.supabase.co">
+<script>
+// Auto-update: check for new version every time app opens
+if('serviceWorker' in navigator){
+  // Register SW
+  navigator.serviceWorker.register('/gastia/sw.js').then(reg=>{
+    // Check for updates immediately
+    reg.update();
+    // When new SW is waiting, activate it right away
+    reg.addEventListener('updatefound',()=>{
+      const newSW = reg.installing;
+      newSW.addEventListener('statechange',()=>{
+        if(newSW.state==='installed'&&navigator.serviceWorker.controller){
+          // New version ready — reload silently
+          newSW.postMessage({type:'SKIP_WAITING'});
+        }
+      });
+    });
+  });
+  // When SW activates, reload to get fresh content
+  let refreshing=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!refreshing){ refreshing=true; window.location.reload(); }
+  });
+}
+</script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMyNTYzZWIiLz48cmVjdCB4PSI3IiB5PSIxNCIgd2lkdGg9IjI2IiBoZWlnaHQ9IjE4IiByeD0iMyIgZmlsbD0id2hpdGUiIG9wYWNpdHk9Ii4xNSIvPjxyZWN0IHg9IjciIHk9IjE0IiB3aWR0aD0iMjYiIGhlaWdodD0iMTgiIHJ4PSIzIiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiLz48cGF0aCBkPSJNNyAxOWgyNiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIG9wYWNpdHk9Ii41Ii8+PHJlY3QgeD0iNyIgeT0iMTAiIHdpZHRoPSIyMiIgaGVpZ2h0PSI0IiByeD0iMiIgZmlsbD0id2hpdGUiIG9wYWNpdHk9Ii42Ii8+PHJlY3QgeD0iMjUiIHk9IjIxIiB3aWR0aD0iNiIgaGVpZ2h0PSI1IiByeD0iMS41IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iLjkiLz48Y2lyY2xlIGN4PSIyOCIgY3k9IjIzLjUiIHI9IjEiIGZpbGw9IiMyNTYzZWIiLz48L3N2Zz4=">
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMyNTYzZWIiLz48cmVjdCB4PSI3IiB5PSIxNCIgd2lkdGg9IjI2IiBoZWlnaHQ9IjE4IiByeD0iMyIgZmlsbD0id2hpdGUiIG9wYWNpdHk9Ii4xNSIvPjxyZWN0IHg9IjciIHk9IjE0IiB3aWR0aD0iMjYiIGhlaWdodD0iMTgiIHJ4PSIzIiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiLz48cGF0aCBkPSJNNyAxOWgyNiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIG9wYWNpdHk9Ii41Ii8+PHJlY3QgeD0iNyIgeT0iMTAiIHdpZHRoPSIyMiIgaGVpZ2h0PSI0IiByeD0iMiIgZmlsbD0id2hpdGUiIG9wYWNpdHk9Ii42Ii8+PHJlY3QgeD0iMjUiIHk9IjIxIiB3aWR0aD0iNiIgaGVpZ2h0PSI1IiByeD0iMS41IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iLjkiLz48Y2lyY2xlIGN4PSIyOCIgY3k9IjIzLjUiIHI9IjEiIGZpbGw9IiMyNTYzZWIiLz48L3N2Zz4=">
 
