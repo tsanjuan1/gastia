@@ -2041,6 +2041,7 @@ async function saveExpense(){
   const desc=q('f-desc').value.trim();
   if(!amount||amount<=0){showToast('⚠️ Ingresá un importe');return}
   if(!desc){showToast('⚠️ Ingresá una descripción');return}
+
   const tags=Array.from(qa('.tag.active')).map(t=>t.dataset.tag);
   const btn=q('submit-btn');
   const pmId=selPmId||payMethods[0]?.id||null;
@@ -2050,55 +2051,49 @@ async function saveExpense(){
   const merchant=q('f-merchant').value.trim();
   const notes=q('f-notes').value.trim();
   const currency=q('f-currency').value;
+  const wasEditing=editingId; // snapshot before async ops
 
   btn.disabled=true;
   btn.innerHTML='<div class="spinner" style="width:18px;height:18px;border-width:2px;margin:0 auto"></div>';
 
   try {
-    // If fixed + cuotas selected + NOT editing existing → create installment plan
-    if(selType==='fixed' && selectedInstallments !== 0 && !editingId){
+    if(selType==='fixed' && selectedInstallments !== 0 && !wasEditing){
       const totalCuotas = selectedInstallments === -1 ? null : selectedInstallments;
       const plan = {
-        user_id: currentUser.id,
-        description: desc,
-        amount_per_installment: amount,
-        currency,
-        total_installments: totalCuotas,
-        paid_installments: 0,
-        start_date: expDate,
-        last_generated_date: null,
-        category, subcategory,
-        payment_method_id: pmId,
-        merchant: merchant||null,
-        tags, status:'active',
+        user_id: currentUser.id, description: desc,
+        amount_per_installment: amount, currency,
+        total_installments: totalCuotas, paid_installments: 0,
+        start_date: expDate, last_generated_date: null,
+        category, subcategory, payment_method_id: pmId,
+        merchant: merchant||null, tags, status:'active',
       };
       const {data:planData, error:planErr} = await sb.from('installment_plans').insert(plan).select().single();
       if(planErr) throw planErr;
       installmentPlans.push(planData);
-      // Generate first installment expense now
       await generatePendingInstallments();
       showToast('Plan de cuotas creado ✓');
-      showView('dashboard');
     } else {
-      // Regular expense (no cuotas, or editing)
       await dbSaveExpense({
-        id: editingId||null,
+        id: wasEditing||null,
         date: expDate, amount, currency,
         description: desc, category, subcategory,
         payment_method_id: pmId,
-        account: null, merchant, notes,
-        type: selType, tags,
+        merchant, notes, type: selType, tags,
       });
-      showToast(editingId?'Gasto actualizado ✓':'Gasto guardado ✓');
-      editingId=null; // clear before showView so resetForm works correctly
-      showView('dashboard');
+      showToast(wasEditing?'Gasto actualizado ✓':'Gasto guardado ✓');
     }
+    // Always reset state on success
+    editingId=null;
+    btn.disabled=false;
+    btn.innerHTML='Guardar gasto';
+    showView('dashboard');
   } catch(err){
     showToast('Error al guardar: '+err.message);
     btn.disabled=false;
-    btn.innerHTML=editingId?'Guardar cambios':'Guardar gasto';
+    btn.innerHTML=wasEditing?'Guardar cambios':'Guardar gasto';
   }
 }
+
 
 /* ══════════════════════════════════════════
    ANALYSIS
