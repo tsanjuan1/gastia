@@ -8,6 +8,8 @@
 <meta name="apple-mobile-web-app-title" content="Gastia">
 <title>Gastia — Control de Gastos</title>
 <link rel="preconnect" href="https://lxlqgkwiapyehumbfzdm.supabase.co">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMyNTYzZWIiLz48cmVjdCB4PSI3IiB5PSIxNCIgd2lkdGg9IjI2IiBoZWlnaHQ9IjE4IiByeD0iMyIgZmlsbD0id2hpdGUiIG9wYWNpdHk9Ii4xNSIvPjxyZWN0IHg9IjciIHk9IjE0IiB3aWR0aD0iMjYiIGhlaWdodD0iMTgiIHJ4PSIzIiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiLz48cGF0aCBkPSJNNyAxOWgyNiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIG9wYWNpdHk9Ii41Ii8+PHJlY3QgeD0iNyIgeT0iMTAiIHdpZHRoPSIyMiIgaGVpZ2h0PSI0IiByeD0iMiIgZmlsbD0id2hpdGUiIG9wYWNpdHk9Ii42Ii8+PHJlY3QgeD0iMjUiIHk9IjIxIiB3aWR0aD0iNiIgaGVpZ2h0PSI1IiByeD0iMS41IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iLjkiLz48Y2lyY2xlIGN4PSIyOCIgY3k9IjIzLjUiIHI9IjEiIGZpbGw9IiMyNTYzZWIiLz48L3N2Zz4=">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMyNTYzZWIiLz48cmVjdCB4PSI3IiB5PSIxNCIgd2lkdGg9IjI2IiBoZWlnaHQ9IjE4IiByeD0iMyIgZmlsbD0id2hpdGUiIG9wYWNpdHk9Ii4xNSIvPjxyZWN0IHg9IjciIHk9IjE0IiB3aWR0aD0iMjYiIGhlaWdodD0iMTgiIHJ4PSIzIiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiLz48cGF0aCBkPSJNNyAxOWgyNiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIG9wYWNpdHk9Ii41Ii8+PHJlY3QgeD0iNyIgeT0iMTAiIHdpZHRoPSIyMiIgaGVpZ2h0PSI0IiByeD0iMiIgZmlsbD0id2hpdGUiIG9wYWNpdHk9Ii42Ii8+PHJlY3QgeD0iMjUiIHk9IjIxIiB3aWR0aD0iNiIgaGVpZ2h0PSI1IiByeD0iMS41IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iLjkiLz48Y2lyY2xlIGN4PSIyOCIgY3k9IjIzLjUiIHI9IjEiIGZpbGw9IiMyNTYzZWIiLz48L3N2Zz4=">
 
 
 <style>
@@ -317,6 +319,17 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 
 <!-- AUTH -->
 <div id="auth-screen" class="hidden">
+  <div style="margin-bottom:16px;margin-top:-8px">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="72" height="72" style="display:block;margin:0 auto;filter:drop-shadow(0 4px 12px rgba(37,99,235,.4))">
+      <rect width="40" height="40" rx="11" fill="#2563eb"/>
+      <rect x="7" y="14" width="26" height="18" rx="3" fill="white" opacity=".15"/>
+      <rect x="7" y="14" width="26" height="18" rx="3" fill="none" stroke="white" stroke-width="2"/>
+      <path d="M7 19h26" stroke="white" stroke-width="1.5" opacity=".5"/>
+      <rect x="7" y="10" width="22" height="4" rx="2" fill="white" opacity=".6"/>
+      <rect x="25" y="21" width="6" height="5" rx="1.5" fill="white" opacity=".9"/>
+      <circle cx="28" cy="23.5" r="1" fill="#2563eb"/>
+    </svg>
+  </div>
   <div class="auth-logo">gast<span>ia</span></div>
   <div class="auth-sub">Tu control de gastos personal</div>
   <div class="auth-card">
@@ -341,7 +354,18 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 <!-- APP -->
 <div id="app-screen" class="hidden">
   <div class="top-bar">
-    <div class="logo">gast<span>ia</span></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="28" height="28" style="flex-shrink:0">
+        <rect width="40" height="40" rx="8" fill="#2563eb"/>
+        <rect x="7" y="14" width="26" height="18" rx="3" fill="white" opacity=".15"/>
+        <rect x="7" y="14" width="26" height="18" rx="3" fill="none" stroke="white" stroke-width="2"/>
+        <path d="M7 19h26" stroke="white" stroke-width="1.5" opacity=".5"/>
+        <rect x="7" y="10" width="22" height="4" rx="2" fill="white" opacity=".6"/>
+        <rect x="25" y="21" width="6" height="5" rx="1.5" fill="white" opacity=".9"/>
+        <circle cx="28" cy="23.5" r="1" fill="#2563eb"/>
+      </svg>
+      <div class="logo">gast<span>ia</span></div>
+    </div>
     <div class="top-right">
       <div class="icon-btn" onclick="showView('add')">＋</div>
       <div class="user-dot" id="user-dot" onclick="showView('config')">?</div>
